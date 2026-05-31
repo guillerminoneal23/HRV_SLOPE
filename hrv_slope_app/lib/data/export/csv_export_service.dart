@@ -484,27 +484,11 @@ CsvExportData exportIndividualNomogramCurvePointsCsv(
 ) {
   const headers = ['curve_type', 'intensity_percent', 'expected_slope'];
   final rows = <List<Object?>>[
-    for (final point in data.populationCurvePoints)
-      ['population_mean', point.intensityPercent, point.slope],
     for (final point in data.individualCurvePoints)
       ['individual', point.intensityPercent, point.slope],
     for (final point in data.hybridCurvePoints)
       ['hybrid', point.intensityPercent, point.slope],
   ];
-  for (final source in PopulationNomogramSource.values) {
-    if (source == data.populationPreset) {
-      for (final intensity in _curveIntensities(source)) {
-        final bands = evaluatePopulationNomogramBands(
-          intensity,
-          source: source,
-        );
-        rows.addAll([
-          ['population_lower', intensity, bands.expectedLower],
-          ['population_upper', intensity, bands.expectedUpper],
-        ]);
-      }
-    }
-  }
   return CsvExportData(
     filename: _filename('individual_nomogram_curves', data.athleteName),
     content: buildCsv(headers, rows),
@@ -621,15 +605,5 @@ String _thresholdForFlag(String ruleName) {
       return '7-session ITL average >50% above 28-session average';
     default:
       return '';
-  }
-}
-
-Iterable<double> _curveIntensities(PopulationNomogramSource preset) sync* {
-  final start = preset == PopulationNomogramSource.excelOperational ? 55 : 60;
-  const end = 105;
-  const steps = 40;
-  final dx = (end - start) / steps;
-  for (var i = 0; i <= steps; i++) {
-    yield start + i * dx;
   }
 }

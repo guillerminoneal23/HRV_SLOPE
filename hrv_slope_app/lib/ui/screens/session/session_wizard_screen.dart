@@ -122,10 +122,8 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
 
   Future<void> _loadPreset() async {
     final val = await _db.settingsDao.getSetting('population_nomogram_preset');
-    if (val == 'paper_original_2019' && mounted) {
-      setState(
-        () => _nomogramPreset = PopulationNomogramSource.paperOriginal2019,
-      );
+    if (mounted) {
+      setState(() => _nomogramPreset = parsePopulationNomogramSource(val));
     }
   }
 

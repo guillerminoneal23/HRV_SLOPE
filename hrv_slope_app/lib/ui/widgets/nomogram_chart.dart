@@ -338,7 +338,7 @@ class NomogramChart extends StatelessWidget {
     switch (preset) {
       case PopulationNomogramSource.excelOperational:
         return (start: 55.0, end: 105.0);
-      case PopulationNomogramSource.paperOriginal2019:
+      case PopulationNomogramSource.slopeOrellana19:
         return (start: 60.0, end: 105.0);
     }
   }

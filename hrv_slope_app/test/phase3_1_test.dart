@@ -213,12 +213,12 @@ void main() {
       expect(find.text('Mean'), findsOneWidget);
     });
 
-    testWidgets('supports paper_original_2019 preset', (tester) async {
+    testWidgets('supports slope_Orellana_19 preset', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: NomogramChart(
-              preset: PopulationNomogramSource.paperOriginal2019,
+              preset: PopulationNomogramSource.slopeOrellana19,
               observedPoints: const [
                 NomogramObservedPoint(
                   xIntensityPercent: 83.11,

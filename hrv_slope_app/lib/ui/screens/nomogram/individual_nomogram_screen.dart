@@ -47,9 +47,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
     final presetName = await widget.database.settingsDao.getSetting(
       'population_nomogram_preset',
     );
-    final preset = presetName == 'paper_original_2019'
-        ? PopulationNomogramSource.paperOriginal2019
-        : PopulationNomogramSource.excelOperational;
+    final preset = parsePopulationNomogramSource(presetName);
     final details = await widget.database.sessionsDao
         .getSessionDetailsForAthlete(widget.athleteId);
     final data = buildIndividualNomogramData(
@@ -282,8 +280,8 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
                       child: Text('Excel'),
                     ),
                     DropdownMenuItem(
-                      value: PopulationNomogramSource.paperOriginal2019,
-                      child: Text('Paper 2019'),
+                      value: PopulationNomogramSource.slopeOrellana19,
+                      child: Text('slope_Orellana_19'),
                     ),
                   ],
                   onChanged: (value) {

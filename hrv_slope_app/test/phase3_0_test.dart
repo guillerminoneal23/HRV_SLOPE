@@ -283,9 +283,9 @@ void main() {
 
       final reportPaper = buildIndividualReport(
         detail: _detail(),
-        nomogramPreset: PopulationNomogramSource.paperOriginal2019,
+        nomogramPreset: PopulationNomogramSource.slopeOrellana19,
       );
-      expect(reportPaper.nomogramSummary!.presetName, 'paper_original_2019');
+      expect(reportPaper.nomogramSummary!.presetName, 'slope_Orellana_19');
     });
 
     test('draft session shows draft warning and disables nomogram', () {
@@ -337,12 +337,12 @@ void main() {
       expect(find.text('Upper band'), findsOneWidget);
     });
 
-    testWidgets('chart renders for paper_original_2019 preset', (tester) async {
+    testWidgets('chart renders for slope_Orellana_19 preset', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: NomogramChart(
-              preset: PopulationNomogramSource.paperOriginal2019,
+              preset: PopulationNomogramSource.slopeOrellana19,
             ),
           ),
         ),
@@ -398,10 +398,10 @@ void main() {
       expect(bands.warnings, isEmpty);
     });
 
-    test('evaluatePopulationNomogramBands at 80% paper_original_2019', () {
+    test('evaluatePopulationNomogramBands at 80% slope_Orellana_19', () {
       final bands = evaluatePopulationNomogramBands(
         80.0,
-        source: PopulationNomogramSource.paperOriginal2019,
+        source: PopulationNomogramSource.slopeOrellana19,
       );
       expect(bands.expectedLower, greaterThan(0));
       expect(bands.expectedMean, greaterThan(bands.expectedLower));

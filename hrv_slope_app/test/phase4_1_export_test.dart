@@ -75,6 +75,15 @@ void main() {
       expect(export.content, contains('expected_lower'));
       expect(export.content, contains('Check context'));
     });
+
+    test('uses slope_Orellana_19 preset name in new CSV output', () {
+      final export = exportIndividualReportCsv(
+        _individualReport(presetName: 'slope_Orellana_19'),
+      );
+
+      expect(export.content, contains('slope_Orellana_19'));
+      expect(export.content, isNot(contains('paper_original_2019')));
+    });
   });
 
   group('Group report export', () {
@@ -138,9 +147,11 @@ void main() {
 
       expect(summary.content, contains('recommended_mode'));
       expect(summary.content, contains('hybrid'));
-      expect(curves.content, contains('population_mean'));
       expect(curves.content, contains('individual'));
       expect(curves.content, contains('hybrid'));
+      expect(curves.content, isNot(contains('population_mean')));
+      expect(curves.content, isNot(contains('population_lower')));
+      expect(curves.content, isNot(contains('population_upper')));
     });
   });
 
@@ -158,14 +169,15 @@ void main() {
       expect(export.content, contains('expected_upper'));
     });
 
-    test('exports paper_original_2019 preset bands', () {
+    test('exports slope_Orellana_19 preset bands', () {
       final export = exportPopulationNomogramCsv(
-        PopulationNomogramSource.paperOriginal2019,
+        PopulationNomogramSource.slopeOrellana19,
         startIntensity: 40,
         endIntensity: 40,
       );
 
-      expect(export.content, contains('paper_original_2019'));
+      expect(export.content, contains('slope_Orellana_19'));
+      expect(export.content, isNot(contains('paper_original_2019')));
       expect(export.content, contains('outside the'));
     });
   });
@@ -276,7 +288,9 @@ void main() {
   });
 }
 
-IndividualReportData _individualReport() {
+IndividualReportData _individualReport({
+  String presetName = 'excel_operational',
+}) {
   const classification = InternalLoadClassification.expectedResponse;
   return IndividualReportData(
     athleteName: 'VALORACIÓN Runner',
@@ -318,8 +332,8 @@ IndividualReportData _individualReport() {
       intensitySourceForSlope: 'External',
       primaryIntensityMetric: 'speed_kmh_div_mas',
     ),
-    nomogramSummary: const NomogramReportSummary(
-      presetName: 'excel_operational',
+    nomogramSummary: NomogramReportSummary(
+      presetName: presetName,
       intensityPercent: 80,
       observedSlope: 2,
       expectedLower: 0.1,

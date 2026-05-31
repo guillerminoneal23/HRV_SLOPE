@@ -485,9 +485,9 @@ void main() {
         rmssdRecovery: 19.0,
         recoveryWindowStartMin: 5,
         recoveryWindowEndMin: 10,
-        populationPreset: PopulationNomogramSource.paperOriginal2019,
+        populationPreset: PopulationNomogramSource.slopeOrellana19,
       );
-      expect(p.populationNomogramPreset, 'paper_original_2019');
+      expect(p.populationNomogramPreset, 'slope_Orellana_19');
     });
 
     test('window 10-15 uses t = 15', () {

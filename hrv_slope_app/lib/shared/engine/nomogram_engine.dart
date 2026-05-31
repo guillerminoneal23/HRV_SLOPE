@@ -14,21 +14,40 @@ import 'package:hrv_slope_app/shared/engine/slope_calculator.dart';
 // ---------------------------------------------------------------------------
 
 /// Population nomogram presets supported by the app.
-enum PopulationNomogramSource { paperOriginal2019, excelOperational }
+enum PopulationNomogramSource { slopeOrellana19, excelOperational }
 
 /// Source type for a classification or expected-slope model.
 enum NomogramModelSource {
-  paperOriginal2019,
+  slopeOrellana19,
   excelOperational,
   individual,
   hybrid,
 }
 
+const String kSlopeOrellana19PresetName = 'slope_Orellana_19';
+const String kLegacyPaperOriginal2019PresetName = 'paper_original_2019';
+
+PopulationNomogramSource parsePopulationNomogramSource(
+  String? value, {
+  PopulationNomogramSource fallback = kDefaultPopulationNomogramSource,
+}) {
+  final normalized = value?.trim();
+  switch (normalized) {
+    case kSlopeOrellana19PresetName:
+    case kLegacyPaperOriginal2019PresetName:
+      return PopulationNomogramSource.slopeOrellana19;
+    case 'excel_operational':
+      return PopulationNomogramSource.excelOperational;
+    default:
+      return fallback;
+  }
+}
+
 extension PopulationNomogramSourceName on PopulationNomogramSource {
   String get presetName {
     switch (this) {
-      case PopulationNomogramSource.paperOriginal2019:
-        return 'paper_original_2019';
+      case PopulationNomogramSource.slopeOrellana19:
+        return kSlopeOrellana19PresetName;
       case PopulationNomogramSource.excelOperational:
         return 'excel_operational';
     }
@@ -36,8 +55,8 @@ extension PopulationNomogramSourceName on PopulationNomogramSource {
 
   NomogramModelSource get modelSource {
     switch (this) {
-      case PopulationNomogramSource.paperOriginal2019:
-        return NomogramModelSource.paperOriginal2019;
+      case PopulationNomogramSource.slopeOrellana19:
+        return NomogramModelSource.slopeOrellana19;
       case PopulationNomogramSource.excelOperational:
         return NomogramModelSource.excelOperational;
     }
@@ -270,7 +289,7 @@ class HybridNomogramResult {
 const PopulationNomogramSource kDefaultPopulationNomogramSource =
     PopulationNomogramSource.excelOperational;
 
-const List<NomogramBandPoint> _paperOriginal2019Points = [
+const List<NomogramBandPoint> _slopeOrellana19Points = [
   NomogramBandPoint(
     intensityPercent: 64.39,
     lower: 0.45,
@@ -670,8 +689,8 @@ HybridNomogramResult buildHybridNomogramResult({
 
 List<NomogramBandPoint> _pointsForSource(PopulationNomogramSource source) {
   switch (source) {
-    case PopulationNomogramSource.paperOriginal2019:
-      return _paperOriginal2019Points;
+    case PopulationNomogramSource.slopeOrellana19:
+      return _slopeOrellana19Points;
     case PopulationNomogramSource.excelOperational:
       return _excelOperationalPoints;
   }

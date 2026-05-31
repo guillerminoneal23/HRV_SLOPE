@@ -9,7 +9,7 @@ This tool supports training analysis. It is not a medical diagnostic tool.
 ## Current Status
 
 - Phase 5.1 release readiness pass complete.
-- Latest gate: 363/363 tests passing.
+- Latest gate: 365/365 tests passing.
 - Database schema version: 4.
 - Direct RMSSD input remains the recommended/default workflow.
 - RR interval input is available as an advanced workflow.
@@ -34,11 +34,15 @@ Implemented:
 - individual and hybrid nomogram overlay
 - CSV export for individual reports, group reports, longitudinal dashboards,
   individual nomograms, and population nomogram curve points
+- Excel-openable CSV exports remain the supported export format; XLSX is still
+  deferred.
 - in-app Instructions Book covering collection, entry, interpretation, and
   export workflows
 - reusable suggestions for session task, sport, protocol, and context fields
 - updated new-session type/task options; Group Session and Post-match Recovery
   remain legacy values for historical sessions, not default new options
+- paper reference preset is identified in new outputs as `slope_Orellana_19`;
+  the legacy `paper_original_2019` identifier is accepted only as an alias.
 
 ## Setup
 

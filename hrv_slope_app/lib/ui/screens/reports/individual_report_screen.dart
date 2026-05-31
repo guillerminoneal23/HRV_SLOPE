@@ -58,9 +58,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
       final presetName = await widget.database.settingsDao.getSetting(
         'nomogram_preset',
       );
-      final preset = presetName == 'paper_original_2019'
-          ? PopulationNomogramSource.paperOriginal2019
-          : PopulationNomogramSource.excelOperational;
+      final preset = parsePopulationNomogramSource(presetName);
 
       final report = buildIndividualReport(
         detail: detail,
@@ -387,9 +385,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
           const SizedBox(height: 16),
           // The chart
           NomogramChart(
-            preset: n.presetName == 'paper_original_2019'
-                ? PopulationNomogramSource.paperOriginal2019
-                : PopulationNomogramSource.excelOperational,
+            preset: parsePopulationNomogramSource(n.presetName),
             observedIntensity: n.intensityPercent,
             observedSlope: n.observedSlope,
           ),

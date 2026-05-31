@@ -36,11 +36,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final val = await _db.settingsDao.getSetting('population_nomogram_preset');
     if (mounted) {
       setState(() {
-        if (val == 'paper_original_2019') {
-          _preset = PopulationNomogramSource.paperOriginal2019;
-        } else {
-          _preset = PopulationNomogramSource.excelOperational;
-        }
+        _preset = parsePopulationNomogramSource(val);
         _loading = false;
       });
     }
@@ -93,9 +89,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
                 RadioListTile<PopulationNomogramSource>(
-                  value: PopulationNomogramSource.paperOriginal2019,
+                  value: PopulationNomogramSource.slopeOrellana19,
                   groupValue: _preset,
-                  title: const Text('paper_original_2019'),
+                  title: const Text('slope_Orellana_19'),
                   subtitle: const Text(
                     'Original 2019 paper values from Naranjo Orellana et al.\nIntensity anchors: 64.39%, 83.11%, 100%.',
                   ),

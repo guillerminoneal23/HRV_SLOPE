@@ -286,19 +286,26 @@ void main() {
     });
 
     test(
-      'paper original preset remains available and exact at source points',
+      'slope_Orellana_19 preset remains available and exact at source points',
       () {
         final bands = evaluatePopulationNomogramBands(
           64.39,
-          source: PopulationNomogramSource.paperOriginal2019,
+          source: PopulationNomogramSource.slopeOrellana19,
         );
 
-        expect(bands.presetName, equals('paper_original_2019'));
+        expect(bands.presetName, equals('slope_Orellana_19'));
         expect(bands.expectedLower, closeTo(0.45, 0.001));
         expect(bands.expectedMean, closeTo(1.51, 0.001));
         expect(bands.expectedUpper, closeTo(2.57, 0.001));
       },
     );
+
+    test('legacy paper_original_2019 maps to slope_Orellana_19', () {
+      final source = parsePopulationNomogramSource('paper_original_2019');
+
+      expect(source, PopulationNomogramSource.slopeOrellana19);
+      expect(source.presetName, equals('slope_Orellana_19'));
+    });
 
     test('values outside validated source range emit warnings', () {
       final low = evaluatePopulationNomogramBands(40);

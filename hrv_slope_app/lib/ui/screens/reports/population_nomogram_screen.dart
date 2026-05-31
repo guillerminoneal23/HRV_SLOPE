@@ -39,9 +39,7 @@ class _PopulationNomogramScreenState extends State<PopulationNomogramScreen> {
     if (mounted) {
       setState(() {
         _details = details;
-        _preset = presetName == 'paper_original_2019'
-            ? PopulationNomogramSource.paperOriginal2019
-            : PopulationNomogramSource.excelOperational;
+        _preset = parsePopulationNomogramSource(presetName);
         _loading = false;
       });
     }
@@ -148,8 +146,8 @@ class _PopulationNomogramScreenState extends State<PopulationNomogramScreen> {
                   label: Text('Excel operational'),
                 ),
                 ButtonSegment(
-                  value: PopulationNomogramSource.paperOriginal2019,
-                  label: Text('Paper 2019'),
+                  value: PopulationNomogramSource.slopeOrellana19,
+                  label: Text('slope_Orellana_19'),
                 ),
               ],
               selected: {_preset},
