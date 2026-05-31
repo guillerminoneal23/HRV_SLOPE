@@ -1,0 +1,56 @@
+name: hrv_slope_app
+description: "HRV Slope App — Internal Training Load Monitor based on RMSSD-Slope"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Database
+  drift: ^2.25.0
+  sqlite3_flutter_libs: ^0.5.0
+  path_provider: ^2.1.0
+  path: ^1.9.0
+
+  # State management
+  flutter_riverpod: ^2.6.0
+  riverpod_annotation: ^2.6.0
+
+  # Charts
+  fl_chart: ^1.2.0
+
+  # File I/O
+  file_picker: ^9.0.0
+  csv: ^6.0.0
+  spreadsheet_decoder: ^2.3.0
+
+  # Utils
+  intl: ^0.20.0
+  uuid: ^4.5.0
+  collection: ^1.19.0
+  equatable: ^2.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # Drift code generation
+  drift_dev: ^2.25.0
+  build_runner: ^2.4.0
+
+  # Riverpod code generation
+  riverpod_generator: ^2.6.0
+  custom_lint: ^0.7.0
+  riverpod_lint: ^2.6.0
+
+  # Testing
+  mocktail: ^1.0.0
+
+flutter:
+  uses-material-design: true

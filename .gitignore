@@ -1,0 +1,20 @@
+# Root-level local/editor artifacts
+.vscode/
+*.log
+*.tmp
+*.bak
+
+# Local app/database files
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+
+# Future export/temp output
+exports/
+tmp/
+
+# Public repository: keep reference index, do not publish source PDFs/workbooks.
+docs/references/*
+!docs/references/README.md
+docs/archive/*.txt
