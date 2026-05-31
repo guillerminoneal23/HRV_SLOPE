@@ -4,6 +4,17 @@ library;
 /// Valid session types.
 enum SessionType {
   training('Training'),
+  endurance('Endurance'),
+  speed('Speed'),
+  conditioning('Conditioning'),
+  technicalTactical('Technical/Tactical'),
+  test('Test'),
+  strength('Strength'),
+  sit('SIT'),
+  hiit('HIIT'),
+  rsa('RSA'),
+  intermittentTest('Intermittent Test'),
+  strengthTraining('Strength Training'),
   incrementalTest('Incremental Test'),
   constantLoadTest('Constant Load Test'),
   timeToExhaustion('Time to Exhaustion'),
@@ -18,11 +29,35 @@ enum SessionType {
   /// Parse from stored string.
   static SessionType? fromString(String? value) {
     if (value == null) return null;
+    final normalized = value.trim().toLowerCase();
     return SessionType.values.cast<SessionType?>().firstWhere(
-      (t) => t!.name == value,
+      (t) => t!.name == value || t.label.toLowerCase() == normalized,
       orElse: () => null,
     );
   }
+
+  bool get isLegacyNewSessionOption =>
+      this == SessionType.groupSession || this == SessionType.postMatchRecovery;
+}
+
+/// Session type option sets.
+abstract final class SessionTypeOptions {
+  /// Values offered when creating a new session.
+  static final List<SessionType> newSessionOptions = SessionType.values
+      .where((type) => !type.isLegacyNewSessionOption)
+      .toList(growable: false);
+
+  /// Legacy labels remain representable for historical sessions.
+  static const legacyLabels = [
+    'Group Session',
+    'Post-match Recovery',
+    'Post Match Recovery',
+  ];
+
+  /// System task tags seeded into the reusable catalog.
+  static final List<String> systemTaskTagNames = [
+    for (final type in newSessionOptions) type.label,
+  ];
 }
 
 /// Variable categories.

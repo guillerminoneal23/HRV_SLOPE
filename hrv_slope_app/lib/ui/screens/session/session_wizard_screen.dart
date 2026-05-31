@@ -12,10 +12,12 @@ import 'package:hrv_slope_app/core/constants/hrv_constants.dart';
 import 'package:hrv_slope_app/core/constants/hrv_sources.dart';
 import 'package:hrv_slope_app/core/constants/session_constants.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
+import 'package:hrv_slope_app/data/services/reusable_tag_service.dart';
 import 'package:hrv_slope_app/shared/engine/calculation_preview.dart';
 import 'package:hrv_slope_app/shared/engine/intensity_resolver.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/widgets/reusable_tag_text_field.dart';
 import 'package:hrv_slope_app/ui/widgets/rr_input_widget.dart';
 
 class SessionWizardScreen extends StatefulWidget {
@@ -35,9 +37,13 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
   // Step 1: Session info
   final _sessionNameCtrl = TextEditingController();
   final _sportCtrl = TextEditingController();
+  final _protocolCtrl = TextEditingController();
+  final _contextCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   DateTime _sessionDate = DateTime.now();
   SessionType _sessionType = SessionType.training;
+  late final ReusableTagService _tagService;
+  Map<ReusableTagCategory, List<ReusableTag>> _tags = {};
 
   // Step 2: External load
   final Map<String, TextEditingController> _extCtrls = {};
@@ -69,8 +75,10 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
   void initState() {
     super.initState();
     _db = AppDatabase();
+    _tagService = ReusableTagService(_db.settingsDao);
     _loadAthletes();
     _loadPreset();
+    _loadTags();
     for (final v in StandardVariables.externalVariables) {
       _extCtrls[v.name] = TextEditingController();
     }
@@ -83,6 +91,8 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
   void dispose() {
     _sessionNameCtrl.dispose();
     _sportCtrl.dispose();
+    _protocolCtrl.dispose();
+    _contextCtrl.dispose();
     _notesCtrl.dispose();
     _rmssdRecCtrl.dispose();
     _rmssdExCtrl.dispose();
@@ -108,6 +118,37 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
     if (val == 'paper_original_2019' && mounted) {
       setState(
         () => _nomogramPreset = PopulationNomogramSource.paperOriginal2019,
+      );
+    }
+  }
+
+  Future<void> _loadTags() async {
+    await _tagService.ensureSystemTags();
+    final entries = await Future.wait(
+      ReusableTagCategory.values.map((category) async {
+        final tags = await _tagService.getTagsByCategory(category);
+        return MapEntry(category, tags);
+      }),
+    );
+    if (mounted) {
+      setState(() => _tags = Map.fromEntries(entries));
+    }
+  }
+
+  List<String> _tagOptions(ReusableTagCategory category, String? value) {
+    return ReusableTagService.tagNamesIncludingValue(
+      _tags[category] ?? const [],
+      value,
+    );
+  }
+
+  Future<void> _saveTag(ReusableTagCategory category, String value) async {
+    final tag = await _tagService.addTagIfMissing(category, value);
+    if (tag == null) return;
+    await _loadTags();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${tag.name} saved for future sessions')),
       );
     }
   }
@@ -330,6 +371,14 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
           taskName: drift.Value(p.sessionName),
           sport: drift.Value(p.sport),
           sessionType: drift.Value(_sessionType.name),
+          protocolName: drift.Value(
+            _protocolCtrl.text.trim().isEmpty
+                ? null
+                : _protocolCtrl.text.trim(),
+          ),
+          contextEnvironment: drift.Value(
+            _contextCtrl.text.trim().isEmpty ? null : _contextCtrl.text.trim(),
+          ),
           isDraft: const drift.Value(false),
           intensityPercent: drift.Value(p.intensityPercent),
           intensitySource: drift.Value(p.intensityResolution?.method),
@@ -478,6 +527,8 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
       _selectedAthlete = null;
       _sessionNameCtrl.clear();
       _sportCtrl.clear();
+      _protocolCtrl.clear();
+      _contextCtrl.clear();
       _notesCtrl.clear();
       _rmssdRecCtrl.clear();
       _rmssdExCtrl.clear();
@@ -619,28 +670,60 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
       children: [
         Text('Session Details', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
-        TextFormField(
+        ReusableTagTextField(
           controller: _sessionNameCtrl,
-          decoration: const InputDecoration(labelText: 'Session / Task Name *'),
+          labelText: 'Session / Task Name *',
+          options: _tagOptions(
+            ReusableTagCategory.sessionTask,
+            _sessionNameCtrl.text,
+          ),
+          onSaveTag: (value) =>
+              _saveTag(ReusableTagCategory.sessionTask, value),
         ),
         const SizedBox(height: 12),
-        TextFormField(
+        ReusableTagTextField(
           controller: _sportCtrl,
-          decoration: InputDecoration(
-            labelText: 'Sport *',
-            hintText: _selectedAthlete?.sport ?? '',
+          labelText: 'Sport *',
+          hintText: _selectedAthlete?.sport ?? '',
+          options: _tagOptions(
+            ReusableTagCategory.sport,
+            _sportCtrl.text.isEmpty ? _selectedAthlete?.sport : _sportCtrl.text,
           ),
+          onSaveTag: (value) => _saveTag(ReusableTagCategory.sport, value),
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<SessionType>(
           value: _sessionType,
           decoration: const InputDecoration(labelText: 'Session Type'),
-          items: SessionType.values
+          items: SessionTypeOptions.newSessionOptions
               .map((t) => DropdownMenuItem(value: t, child: Text(t.label)))
               .toList(),
           onChanged: (v) {
             if (v != null) setState(() => _sessionType = v);
           },
+        ),
+        const SizedBox(height: 12),
+        ReusableTagTextField(
+          controller: _protocolCtrl,
+          labelText: 'Protocol name',
+          required: false,
+          options: _tagOptions(
+            ReusableTagCategory.protocol,
+            _protocolCtrl.text,
+          ),
+          onSaveTag: (value) => _saveTag(ReusableTagCategory.protocol, value),
+        ),
+        const SizedBox(height: 12),
+        ReusableTagTextField(
+          controller: _contextCtrl,
+          labelText: 'Context / environment',
+          required: false,
+          options: _tagOptions(
+            ReusableTagCategory.contextEnvironment,
+            _contextCtrl.text,
+          ),
+          onSaveTag: (value) =>
+              _saveTag(ReusableTagCategory.contextEnvironment, value),
         ),
         const SizedBox(height: 12),
         ListTile(
@@ -932,6 +1015,14 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
           _pRow('Date', p.sessionDate),
           _pRow('Session', p.sessionName ?? '-'),
           _pRow('Sport', p.sport ?? '-'),
+          _pRow(
+            'Protocol',
+            _protocolCtrl.text.trim().isEmpty ? '-' : _protocolCtrl.text.trim(),
+          ),
+          _pRow(
+            'Context',
+            _contextCtrl.text.trim().isEmpty ? '-' : _contextCtrl.text.trim(),
+          ),
         ]),
         _previewCard('External Variables', [
           for (final v in p.externalVariables)

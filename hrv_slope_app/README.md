@@ -14,6 +14,8 @@ This tool supports training analysis. It is not a medical diagnostic tool.
 - Direct RMSSD input remains the recommended/default workflow.
 - RR interval input is available as an advanced workflow.
 - RR correction is off by default.
+- Reusable local tag catalog is available for session task, sport, protocol
+  name, and context/environment.
 
 Implemented:
 
@@ -31,6 +33,9 @@ Implemented:
   individual nomograms, and population nomogram curve points
 - in-app Instructions Book covering collection, entry, interpretation, and
   export workflows
+- reusable suggestions for session task, sport, protocol, and context fields
+- updated new-session type/task options; Group Session and Post-match Recovery
+  remain legacy values for historical sessions, not default new options
 
 ## Setup
 

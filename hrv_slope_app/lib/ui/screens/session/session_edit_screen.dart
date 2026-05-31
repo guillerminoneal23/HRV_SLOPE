@@ -5,8 +5,10 @@ import 'package:hrv_slope_app/core/constants/hrv_sources.dart';
 import 'package:hrv_slope_app/core/constants/session_constants.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
+import 'package:hrv_slope_app/data/services/reusable_tag_service.dart';
 import 'package:hrv_slope_app/data/services/session_edit_service.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/widgets/reusable_tag_text_field.dart';
 
 class SessionEditScreen extends StatefulWidget {
   final AppDatabase database;
@@ -36,6 +38,8 @@ class _SessionEditScreenState extends State<SessionEditScreen> {
   final _windowEndCtrl = TextEditingController();
   final Map<String, TextEditingController> _externalCtrls = {};
   final Map<String, TextEditingController> _internalCtrls = {};
+  late final ReusableTagService _tagService;
+  Map<ReusableTagCategory, List<ReusableTag>> _tags = {};
 
   SessionDetail? _detail;
   SessionType _sessionType = SessionType.training;
@@ -46,12 +50,14 @@ class _SessionEditScreenState extends State<SessionEditScreen> {
   @override
   void initState() {
     super.initState();
+    _tagService = ReusableTagService(widget.database.settingsDao);
     for (final v in StandardVariables.externalVariables) {
       _externalCtrls[v.name] = TextEditingController();
     }
     for (final v in StandardVariables.internalVariables) {
       _internalCtrls[v.name] = TextEditingController();
     }
+    _loadTags();
     _load();
   }
 
@@ -115,6 +121,45 @@ class _SessionEditScreenState extends State<SessionEditScreen> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _loadTags() async {
+    await _tagService.ensureSystemTags();
+    final entries = await Future.wait(
+      ReusableTagCategory.values.map((category) async {
+        final tags = await _tagService.getTagsByCategory(category);
+        return MapEntry(category, tags);
+      }),
+    );
+    if (mounted) {
+      setState(() => _tags = Map.fromEntries(entries));
+    }
+  }
+
+  List<String> _tagOptions(ReusableTagCategory category, String? value) {
+    return ReusableTagService.tagNamesIncludingValue(
+      _tags[category] ?? const [],
+      value,
+    );
+  }
+
+  Future<void> _saveTag(ReusableTagCategory category, String value) async {
+    final tag = await _tagService.addTagIfMissing(category, value);
+    if (tag == null) return;
+    await _loadTags();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${tag.name} saved for future sessions')),
+      );
+    }
+  }
+
+  List<SessionType> get _sessionTypeOptions {
+    final options = [...SessionTypeOptions.newSessionOptions];
+    if (!options.contains(_sessionType)) {
+      options.add(_sessionType);
+    }
+    return options;
   }
 
   Future<void> _save() async {
@@ -182,12 +227,30 @@ class _SessionEditScreenState extends State<SessionEditScreen> {
             if (_error != null) _errorCard(_error!),
             _section('Session', [
               _text(_dateCtrl, 'Date/time *'),
-              _text(_taskCtrl, 'Session / task name *'),
-              _text(_sportCtrl, 'Sport *'),
+              ReusableTagTextField(
+                controller: _taskCtrl,
+                labelText: 'Session / task name *',
+                options: _tagOptions(
+                  ReusableTagCategory.sessionTask,
+                  _taskCtrl.text,
+                ),
+                onSaveTag: (value) =>
+                    _saveTag(ReusableTagCategory.sessionTask, value),
+              ),
+              ReusableTagTextField(
+                controller: _sportCtrl,
+                labelText: 'Sport *',
+                options: _tagOptions(
+                  ReusableTagCategory.sport,
+                  _sportCtrl.text,
+                ),
+                onSaveTag: (value) =>
+                    _saveTag(ReusableTagCategory.sport, value),
+              ),
               DropdownButtonFormField<SessionType>(
                 initialValue: _sessionType,
                 decoration: const InputDecoration(labelText: 'Session type'),
-                items: SessionType.values
+                items: _sessionTypeOptions
                     .map(
                       (t) => DropdownMenuItem(value: t, child: Text(t.label)),
                     )
@@ -196,8 +259,28 @@ class _SessionEditScreenState extends State<SessionEditScreen> {
                   if (v != null) setState(() => _sessionType = v);
                 },
               ),
-              _text(_protocolCtrl, 'Protocol name'),
-              _text(_contextCtrl, 'Context / environment'),
+              ReusableTagTextField(
+                controller: _protocolCtrl,
+                labelText: 'Protocol name',
+                required: false,
+                options: _tagOptions(
+                  ReusableTagCategory.protocol,
+                  _protocolCtrl.text,
+                ),
+                onSaveTag: (value) =>
+                    _saveTag(ReusableTagCategory.protocol, value),
+              ),
+              ReusableTagTextField(
+                controller: _contextCtrl,
+                labelText: 'Context / environment',
+                required: false,
+                options: _tagOptions(
+                  ReusableTagCategory.contextEnvironment,
+                  _contextCtrl.text,
+                ),
+                onSaveTag: (value) =>
+                    _saveTag(ReusableTagCategory.contextEnvironment, value),
+              ),
               _text(_notesCtrl, 'Notes', required: false, maxLines: 2),
             ]),
             _variablesSection('External variables', _externalCtrls),
