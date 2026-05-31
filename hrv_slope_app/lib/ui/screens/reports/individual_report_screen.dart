@@ -321,7 +321,8 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
                 ? '${s.intensityPercent!.toStringAsFixed(1)}%'
                 : 'Not available',
           ),
-          _row('Intensity source', s.intensitySource),
+          _row('Intensity source', s.intensitySourceForSlope),
+          _row('Primary intensity metric', s.primaryIntensityMetric),
           if (n != null) ...[
             const Divider(height: 20),
             _row('Residual', n.residual.toStringAsFixed(4)),

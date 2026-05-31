@@ -8,6 +8,7 @@ import 'dart:convert';
 
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
+import 'package:hrv_slope_app/shared/engine/intensity_resolver.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,8 @@ class SlopeReportSummary {
   final double? itlIndex;
   final double? intensityPercent;
   final String? intensitySource;
+  final String intensitySourceForSlope;
+  final String? primaryIntensityMetric;
 
   const SlopeReportSummary({
     this.rawSlope,
@@ -75,6 +78,8 @@ class SlopeReportSummary {
     this.itlIndex,
     this.intensityPercent,
     this.intensitySource,
+    this.intensitySourceForSlope = 'Unknown',
+    this.primaryIntensityMetric,
   });
 }
 
@@ -166,7 +171,7 @@ String interpretationTextFor(InternalLoadClassification c) {
   switch (c) {
     case InternalLoadClassification.veryHighInternalLoad:
       return 'Recovery was slower than expected for this intensity. '
-          'Internal load appears high relative to the external load.';
+          'Internal load appears high relative to the recorded intensity.';
     case InternalLoadClassification.highOrModerateInternalLoad:
       return 'Recovery was below the expected mean for this intensity. '
           'Monitor context, accumulated fatigue, and recent load.';
@@ -175,8 +180,8 @@ String interpretationTextFor(InternalLoadClassification c) {
           'intensity.';
     case InternalLoadClassification.lowInternalLoadOrFastRecovery:
       return 'Recovery was faster than the expected upper band for this '
-          'intensity. Internal load appears low relative to the external '
-          'load.';
+          'intensity. Internal load appears low relative to the recorded '
+          'intensity.';
   }
 }
 
@@ -264,6 +269,12 @@ IndividualReportData buildIndividualReport({
     itlIndex: session.itlIndex,
     intensityPercent: session.intensityPercent,
     intensitySource: session.intensitySource,
+    intensitySourceForSlope: intensitySourceForSlopeLabel(
+      session.intensitySource,
+    ),
+    primaryIntensityMetric: primaryIntensityMetricFromMethod(
+      session.intensitySource,
+    ),
   );
 
   // Nomogram classification

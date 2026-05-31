@@ -146,6 +146,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   percentMap: row.percentMap,
                   speedKmh: row.speedKmh,
                   powerW: row.powerW,
+                  rpe110: row.rpe110,
                 ),
                 athlete: AthleteReferenceValues(
                   masKmh: athlete.masKmh,

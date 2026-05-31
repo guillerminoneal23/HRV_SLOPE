@@ -9,11 +9,14 @@ This tool supports training analysis. It is not a medical diagnostic tool.
 ## Current Status
 
 - Phase 5.1 release readiness pass complete.
-- Latest gate: 340/340 tests passing.
+- Latest gate: 363/363 tests passing.
 - Database schema version: 4.
 - Direct RMSSD input remains the recommended/default workflow.
 - RR interval input is available as an advanced workflow.
 - RR correction is off by default.
+- HRV slope interpretation uses valid external intensity first; when external
+  intensity is absent or invalid, internal intensity such as RPE or subjective
+  fatigue can be used as a fallback.
 - Reusable local tag catalog is available for session task, sport, protocol
   name, and context/environment.
 
@@ -117,6 +120,9 @@ Important guardrails:
   interpretive use.
 - ITL index is `1 / interpreted_slope`.
 - No nomogram classification is produced without `intensity_percent`.
+- `intensity_percent` is resolved from external intensity first. If no valid
+  external intensity is available, RPE or subjective fatigue on a 0-10 scale can
+  be converted to 0-100 for slope interpretation.
 - Direct RMSSD input is the default workflow.
 - RR correction is off by default.
 - Raw RR-derived RMSSD is always preserved.

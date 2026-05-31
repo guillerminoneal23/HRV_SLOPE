@@ -86,6 +86,10 @@ class SessionEditService {
         percentMap: input.externalVariables['percent_map'],
         speedKmh: input.externalVariables['speed_kmh'],
         powerW: input.externalVariables['power_w'],
+        rpe110: input.internalVariables['rpe_1_10'],
+        subjectiveFatigue110:
+            input.internalVariables['subjective_fatigue_1_10'],
+        percentHrmax: input.internalVariables['percent_hrmax'],
       ),
       athlete: AthleteReferenceValues(
         masKmh: existing.athlete.masKmh,

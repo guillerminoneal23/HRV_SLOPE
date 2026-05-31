@@ -96,7 +96,7 @@ void main() {
     });
 
     test('no classification when intensity_percent missing', () async {
-      await _edit(db, sessionId, external: {});
+      await _edit(db, sessionId, external: {}, internal: {});
 
       final session = await db.sessionsDao.getSessionById(sessionId);
       expect(session!.intensityPercent, isNull);

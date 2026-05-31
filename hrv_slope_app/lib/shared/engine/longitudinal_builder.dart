@@ -6,6 +6,7 @@ library;
 
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
+import 'package:hrv_slope_app/shared/engine/intensity_resolver.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/shared/engine/statistics.dart';
 
@@ -30,6 +31,8 @@ class LongitudinalPoint {
   final String? taskName;
   final String? sessionType;
   final double? intensityPercent;
+  final String intensitySourceForSlope;
+  final String? primaryIntensityMetric;
   final double? interpretedSlope;
   final double? rawSlope;
   final double? itlIndex;
@@ -49,6 +52,8 @@ class LongitudinalPoint {
     this.taskName,
     this.sessionType,
     this.intensityPercent,
+    this.intensitySourceForSlope = 'Unknown',
+    this.primaryIntensityMetric,
     this.interpretedSlope,
     this.rawSlope,
     this.itlIndex,
@@ -218,6 +223,12 @@ LongitudinalPoint _pointFromDetail(
     taskName: session.taskName,
     sessionType: session.sessionType,
     intensityPercent: session.intensityPercent,
+    intensitySourceForSlope: intensitySourceForSlopeLabel(
+      session.intensitySource,
+    ),
+    primaryIntensityMetric: primaryIntensityMetricFromMethod(
+      session.intensitySource,
+    ),
     interpretedSlope: session.slopeInterpreted,
     rawSlope: session.slopeRaw,
     itlIndex: session.itlIndex,

@@ -52,6 +52,11 @@ class CalculationPreview {
   // Intensity resolution
   final IntensityResolution? intensityResolution;
   final double? intensityPercent;
+  final IntensitySourceForSlope intensitySourceForSlope;
+  final double? primaryIntensityValue;
+  final String? primaryIntensityMetric;
+  final bool usedInternalIntensityFallback;
+  final String? intensitySourceReason;
 
   // RMSSD data
   final double? rmssdExercise;
@@ -113,6 +118,11 @@ class CalculationPreview {
     required this.internalVariables,
     this.intensityResolution,
     this.intensityPercent,
+    required this.intensitySourceForSlope,
+    this.primaryIntensityValue,
+    this.primaryIntensityMetric,
+    this.usedInternalIntensityFallback = false,
+    this.intensitySourceReason,
     this.rmssdExercise,
     required this.rmssdExerciseSource,
     required this.rmssdRecovery,
@@ -214,6 +224,8 @@ CalculationPreview buildCalculationPreview({
 
   // Intensity resolution
   final intensityPercent = intensityResolution?.intensityPercent;
+  final intensitySourceForSlope =
+      intensityResolution?.source ?? IntensitySourceForSlope.unknown;
   final canClassify =
       intensityPercent != null && intensityResolution!.canUseNomogram;
 
@@ -256,6 +268,11 @@ CalculationPreview buildCalculationPreview({
     internalVariables: internalVariables,
     intensityResolution: intensityResolution,
     intensityPercent: intensityPercent,
+    intensitySourceForSlope: intensitySourceForSlope,
+    primaryIntensityValue: intensityPercent,
+    primaryIntensityMetric: intensityResolution?.metricName,
+    usedInternalIntensityFallback: intensityResolution?.isFallback ?? false,
+    intensitySourceReason: intensityResolution?.reason,
     rmssdExercise: effectiveExercise,
     rmssdExerciseSource: effectiveSource,
     rmssdRecovery: rmssdRecovery,

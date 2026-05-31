@@ -346,7 +346,7 @@ CsvImportResult parseCsvImport(
       if (!parsedRow.hasExternalLoad) {
         rowWarnings.add(
           'Row $rowIdx: No external load variable found. '
-          'Cannot compute full analysis.',
+          'Internal intensity can be used for slope interpretation if available.',
         );
       }
       if (!parsedRow.hasInternalLoad) {

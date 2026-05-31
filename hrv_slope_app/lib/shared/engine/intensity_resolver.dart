@@ -1,20 +1,56 @@
 /// Intensity Percent Resolver — Pure Dart logic for determining exercise
 /// intensity as a percentage of a reference maximum.
 ///
-/// Priority chain:
+/// External priority chain:
 /// 1. Direct percent_mas
 /// 2. Direct percent_vvo2max
 /// 3. Direct percent_map
 /// 4. speed_kmh / athlete.MAS_kmh
 /// 5. speed_kmh / athlete.vVO2max_kmh
 /// 6. power_w / athlete.MAP_w
+///
+/// If no valid external intensity is available, internal load can be converted
+/// to a 0-100 intensity percent for slope interpretation. Zero is treated as
+/// non-informative for both external percent inputs and 0-10 internal scales.
 library;
 
-/// Result of intensity percent resolution.
-class IntensityResolution {
-  /// Resolved intensity percent, or null if unresolvable.
+enum IntensitySourceForSlope {
+  external('External'),
+  internal('Internal'),
+  unknown('Unknown');
+
+  final String label;
+  const IntensitySourceForSlope(this.label);
+}
+
+/// Explicit source-aware resolution used by HRV slope calculations.
+class SlopeIntensityResolution {
+  /// Resolved primary intensity percent, or null if unresolvable.
   final double? intensityPercent;
 
+  /// Metric or method selected as primary.
+  final String? metricName;
+
+  /// Broad source of the primary intensity.
+  final IntensitySourceForSlope source;
+
+  /// True when internal load is used because valid external load is absent.
+  final bool isFallback;
+
+  /// Human-readable reason for the selected source or unresolved state.
+  final String? reason;
+
+  const SlopeIntensityResolution({
+    required this.intensityPercent,
+    required this.metricName,
+    required this.source,
+    required this.isFallback,
+    this.reason,
+  });
+}
+
+/// Result of intensity percent resolution.
+class IntensityResolution extends SlopeIntensityResolution {
   /// Method used for resolution.
   final String method;
 
@@ -28,11 +64,15 @@ class IntensityResolution {
   final bool canUseNomogram;
 
   const IntensityResolution({
-    required this.intensityPercent,
+    required super.intensityPercent,
     required this.method,
     required this.sourceVariables,
     required this.warnings,
     required this.canUseNomogram,
+    required super.source,
+    required super.metricName,
+    required super.isFallback,
+    super.reason,
   });
 
   @override
@@ -48,6 +88,13 @@ class IntensityInputs {
   final double? percentMap;
   final double? speedKmh;
   final double? powerW;
+  final double? rpe110;
+  final double? sessionRpe110;
+  final double? subjectiveIntensityPercent;
+  final double? subjectiveIntensity110;
+  final double? subjectiveFatigue110;
+  final double? percentHrmax;
+  final double? internalLoadPercent;
 
   const IntensityInputs({
     this.percentMas,
@@ -55,6 +102,13 @@ class IntensityInputs {
     this.percentMap,
     this.speedKmh,
     this.powerW,
+    this.rpe110,
+    this.sessionRpe110,
+    this.subjectiveIntensityPercent,
+    this.subjectiveIntensity110,
+    this.subjectiveFatigue110,
+    this.percentHrmax,
+    this.internalLoadPercent,
   });
 }
 
@@ -67,143 +121,181 @@ class AthleteReferenceValues {
   const AthleteReferenceValues({this.masKmh, this.vvo2maxKmh, this.mapW});
 }
 
-/// Resolves intensity percent from available inputs and athlete reference values.
+/// Resolves the primary intensity percent for HRV slope interpretation.
 ///
-/// Returns an [IntensityResolution] with the resolved value and metadata.
-/// If intensity cannot be resolved, [IntensityResolution.intensityPercent] is null
-/// and [canUseNomogram] is false.
-IntensityResolution resolveIntensityPercent({
+/// Valid external load is preferred. Internal load is used only when no valid
+/// external intensity can be resolved.
+IntensityResolution resolvePrimaryIntensityForSlope({
   required IntensityInputs inputs,
   required AthleteReferenceValues athlete,
 }) {
   final warnings = <String>[];
 
   // Priority 1: Direct percent_mas
-  if (inputs.percentMas != null) {
-    if (inputs.percentMas! <= 0) {
+  if (_isPresent(inputs.percentMas)) {
+    if (!_isPositiveFinite(inputs.percentMas)) {
       warnings.add('percent_mas must be positive, got ${inputs.percentMas}.');
-      return IntensityResolution(
-        intensityPercent: null,
-        method: 'percent_mas_invalid',
-        sourceVariables: const ['percent_mas'],
-        warnings: warnings,
-        canUseNomogram: false,
-      );
+    } else {
+      return _external(inputs.percentMas!, 'direct_percent_mas', const [
+        'percent_mas',
+      ], warnings: warnings);
     }
-    return IntensityResolution(
-      intensityPercent: inputs.percentMas!,
-      method: 'direct_percent_mas',
-      sourceVariables: const ['percent_mas'],
-      warnings: warnings,
-      canUseNomogram: true,
-    );
   }
 
   // Priority 2: Direct percent_vvo2max
-  if (inputs.percentVvo2max != null) {
-    if (inputs.percentVvo2max! <= 0) {
+  if (_isPresent(inputs.percentVvo2max)) {
+    if (!_isPositiveFinite(inputs.percentVvo2max)) {
       warnings.add(
         'percent_vvo2max must be positive, got ${inputs.percentVvo2max}.',
       );
-      return IntensityResolution(
-        intensityPercent: null,
-        method: 'percent_vvo2max_invalid',
-        sourceVariables: const ['percent_vvo2max'],
-        warnings: warnings,
-        canUseNomogram: false,
-      );
+    } else {
+      return _external(inputs.percentVvo2max!, 'direct_percent_vvo2max', const [
+        'percent_vvo2max',
+      ], warnings: warnings);
     }
-    return IntensityResolution(
-      intensityPercent: inputs.percentVvo2max!,
-      method: 'direct_percent_vvo2max',
-      sourceVariables: const ['percent_vvo2max'],
-      warnings: warnings,
-      canUseNomogram: true,
-    );
   }
 
   // Priority 3: Direct percent_map
-  if (inputs.percentMap != null) {
-    if (inputs.percentMap! <= 0) {
+  if (_isPresent(inputs.percentMap)) {
+    if (!_isPositiveFinite(inputs.percentMap)) {
       warnings.add('percent_map must be positive, got ${inputs.percentMap}.');
-      return IntensityResolution(
-        intensityPercent: null,
-        method: 'percent_map_invalid',
-        sourceVariables: const ['percent_map'],
-        warnings: warnings,
-        canUseNomogram: false,
-      );
+    } else {
+      return _external(inputs.percentMap!, 'direct_percent_map', const [
+        'percent_map',
+      ], warnings: warnings);
     }
-    return IntensityResolution(
-      intensityPercent: inputs.percentMap!,
-      method: 'direct_percent_map',
-      sourceVariables: const ['percent_map'],
-      warnings: warnings,
-      canUseNomogram: true,
-    );
   }
 
   // Priority 4: speed_kmh / athlete.MAS_kmh
-  if (inputs.speedKmh != null && athlete.masKmh != null) {
-    if (inputs.speedKmh! <= 0) {
+  if (_isPresent(inputs.speedKmh) && _isPresent(athlete.masKmh)) {
+    if (!_isPositiveFinite(inputs.speedKmh)) {
       warnings.add('speed_kmh must be positive, got ${inputs.speedKmh}.');
-    } else if (athlete.masKmh! <= 0) {
+    } else if (!_isPositiveFinite(athlete.masKmh)) {
       warnings.add('athlete MAS_kmh must be positive, got ${athlete.masKmh}.');
     } else {
       final percent = inputs.speedKmh! / athlete.masKmh! * 100;
-      return IntensityResolution(
-        intensityPercent: percent,
-        method: 'speed_kmh_div_mas',
-        sourceVariables: const ['speed_kmh', 'athlete.MAS_kmh'],
-        warnings: warnings,
-        canUseNomogram: true,
-      );
+      return _external(percent, 'speed_kmh_div_mas', const [
+        'speed_kmh',
+        'athlete.MAS_kmh',
+      ], warnings: warnings);
     }
   }
 
   // Priority 5: speed_kmh / athlete.vVO2max_kmh
-  if (inputs.speedKmh != null && athlete.vvo2maxKmh != null) {
-    if (inputs.speedKmh! <= 0) {
+  if (_isPresent(inputs.speedKmh) && _isPresent(athlete.vvo2maxKmh)) {
+    if (!_isPositiveFinite(inputs.speedKmh)) {
       warnings.add('speed_kmh must be positive, got ${inputs.speedKmh}.');
-    } else if (athlete.vvo2maxKmh! <= 0) {
+    } else if (!_isPositiveFinite(athlete.vvo2maxKmh)) {
       warnings.add(
         'athlete vVO2max_kmh must be positive, got ${athlete.vvo2maxKmh}.',
       );
     } else {
       final percent = inputs.speedKmh! / athlete.vvo2maxKmh! * 100;
-      return IntensityResolution(
-        intensityPercent: percent,
-        method: 'speed_kmh_div_vvo2max',
-        sourceVariables: const ['speed_kmh', 'athlete.vVO2max_kmh'],
-        warnings: warnings,
-        canUseNomogram: true,
-      );
+      return _external(percent, 'speed_kmh_div_vvo2max', const [
+        'speed_kmh',
+        'athlete.vVO2max_kmh',
+      ], warnings: warnings);
     }
   }
 
   // Priority 6: power_w / athlete.MAP_w
-  if (inputs.powerW != null && athlete.mapW != null) {
-    if (inputs.powerW! <= 0) {
+  if (_isPresent(inputs.powerW) && _isPresent(athlete.mapW)) {
+    if (!_isPositiveFinite(inputs.powerW)) {
       warnings.add('power_w must be positive, got ${inputs.powerW}.');
-    } else if (athlete.mapW! <= 0) {
+    } else if (!_isPositiveFinite(athlete.mapW)) {
       warnings.add('athlete MAP_w must be positive, got ${athlete.mapW}.');
     } else {
       final percent = inputs.powerW! / athlete.mapW! * 100;
-      return IntensityResolution(
-        intensityPercent: percent,
-        method: 'power_w_div_map',
-        sourceVariables: const ['power_w', 'athlete.MAP_w'],
-        warnings: warnings,
-        canUseNomogram: true,
+      return _external(percent, 'power_w_div_map', const [
+        'power_w',
+        'athlete.MAP_w',
+      ], warnings: warnings);
+    }
+  }
+
+  // Internal fallback priority 1: session RPE / RPE on a 0-10 scale.
+  final rpe = _firstValidScale10([
+    (name: 'session_rpe_1_10', value: inputs.sessionRpe110),
+    (name: 'rpe_1_10', value: inputs.rpe110),
+  ], warnings);
+  if (rpe != null) {
+    return _internal(
+      rpe.value * 10,
+      'internal_${rpe.name}',
+      [rpe.name],
+      warnings,
+      'No valid external intensity was available; using RPE on a 0-10 scale.',
+    );
+  }
+
+  // Internal fallback priority 2: subjective intensity.
+  if (_isPresent(inputs.subjectiveIntensityPercent)) {
+    if (_isPositiveFinite(inputs.subjectiveIntensityPercent)) {
+      return _internal(
+        inputs.subjectiveIntensityPercent!,
+        'internal_subjective_intensity_percent',
+        const ['subjective_intensity_percent'],
+        warnings,
+        'No valid external intensity was available; using subjective intensity percent.',
       );
     }
+    warnings.add(
+      'subjective_intensity_percent must be positive, got '
+      '${inputs.subjectiveIntensityPercent}.',
+    );
+  }
+  final subjective = _firstValidScale10([
+    (name: 'subjective_intensity_1_10', value: inputs.subjectiveIntensity110),
+  ], warnings);
+  if (subjective != null) {
+    return _internal(
+      subjective.value * 10,
+      'internal_${subjective.name}',
+      [subjective.name],
+      warnings,
+      'No valid external intensity was available; using subjective intensity on a 0-10 scale.',
+    );
+  }
+
+  // Internal fallback priority 3: subjective fatigue on a 0-10 scale.
+  final fatigue = _firstValidScale10([
+    (name: 'subjective_fatigue_1_10', value: inputs.subjectiveFatigue110),
+  ], warnings);
+  if (fatigue != null) {
+    return _internal(
+      fatigue.value * 10,
+      'internal_${fatigue.name}',
+      [fatigue.name],
+      warnings,
+      'No valid external intensity was available; using subjective fatigue on a 0-10 scale.',
+    );
+  }
+
+  // Internal fallback priority 4: already-normalized internal percentages.
+  for (final percentMetric in [
+    (name: 'internal_load_percent', value: inputs.internalLoadPercent),
+    (name: 'percent_hrmax', value: inputs.percentHrmax),
+  ]) {
+    if (!_isPresent(percentMetric.value)) continue;
+    if (_isPositiveFinite(percentMetric.value)) {
+      return _internal(
+        percentMetric.value!,
+        'internal_${percentMetric.name}',
+        [percentMetric.name],
+        warnings,
+        'No valid external intensity was available; using normalized internal load.',
+      );
+    }
+    warnings.add(
+      '${percentMetric.name} must be positive, got ${percentMetric.value}.',
+    );
   }
 
   // Nothing resolved
   warnings.add(
-    'Intensity percent is required for nomogram interpretation. '
-    'Provide percent_mas, percent_vvo2max, percent_map, '
-    'speed + MAS/vVO2max, or power + MAP.',
+    'Primary intensity is required for intensity-based interpretation. '
+    'Provide external intensity or internal intensity such as RPE or '
+    'subjective fatigue.',
   );
   return IntensityResolution(
     intensityPercent: null,
@@ -211,5 +303,103 @@ IntensityResolution resolveIntensityPercent({
     sourceVariables: const [],
     warnings: warnings,
     canUseNomogram: false,
+    source: IntensitySourceForSlope.unknown,
+    metricName: null,
+    isFallback: false,
+    reason: 'No valid external or internal intensity was available.',
   );
+}
+
+/// Backward-compatible API for resolving intensity percent.
+IntensityResolution resolveIntensityPercent({
+  required IntensityInputs inputs,
+  required AthleteReferenceValues athlete,
+}) {
+  return resolvePrimaryIntensityForSlope(inputs: inputs, athlete: athlete);
+}
+
+IntensityResolution _external(
+  double percent,
+  String method,
+  List<String> sourceVariables, {
+  required List<String> warnings,
+}) {
+  return IntensityResolution(
+    intensityPercent: percent,
+    method: method,
+    sourceVariables: sourceVariables,
+    warnings: warnings,
+    canUseNomogram: true,
+    source: IntensitySourceForSlope.external,
+    metricName: method,
+    isFallback: false,
+    reason: 'Using valid external intensity.',
+  );
+}
+
+IntensityResolution _internal(
+  double percent,
+  String method,
+  List<String> sourceVariables,
+  List<String> warnings,
+  String reason,
+) {
+  return IntensityResolution(
+    intensityPercent: percent,
+    method: method,
+    sourceVariables: sourceVariables,
+    warnings: warnings,
+    canUseNomogram: true,
+    source: IntensitySourceForSlope.internal,
+    metricName: method,
+    isFallback: true,
+    reason: reason,
+  );
+}
+
+({String name, double value})? _firstValidScale10(
+  List<({String name, double? value})> metrics,
+  List<String> warnings,
+) {
+  for (final metric in metrics) {
+    if (!_isPresent(metric.value)) continue;
+    if (_isPositiveFinite(metric.value) && metric.value! <= 10) {
+      return (name: metric.name, value: metric.value!);
+    }
+    warnings.add('${metric.name} must be > 0 and <= 10, got ${metric.value}.');
+  }
+  return null;
+}
+
+bool _isPresent(double? value) => value != null;
+
+bool _isPositiveFinite(double? value) {
+  return value != null && value.isFinite && value > 0;
+}
+
+IntensitySourceForSlope intensitySourceForSlopeFromMethod(String? method) {
+  final normalized = method?.trim().toLowerCase();
+  if (normalized == null || normalized.isEmpty || normalized == 'unresolved') {
+    return IntensitySourceForSlope.unknown;
+  }
+  if (normalized.startsWith('internal_')) {
+    return IntensitySourceForSlope.internal;
+  }
+  return IntensitySourceForSlope.external;
+}
+
+String intensitySourceForSlopeLabel(String? method) {
+  return intensitySourceForSlopeFromMethod(method).label;
+}
+
+String? primaryIntensityMetricFromMethod(String? method) {
+  final normalized = method?.trim();
+  if (normalized == null ||
+      normalized.isEmpty ||
+      normalized.toLowerCase() == 'unresolved') {
+    return null;
+  }
+  return normalized.startsWith('internal_')
+      ? normalized.replaceFirst('internal_', '')
+      : normalized;
 }

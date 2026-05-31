@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/data/services/session_edit_service.dart';
+import 'package:hrv_slope_app/shared/engine/intensity_resolver.dart';
 import 'package:hrv_slope_app/ui/screens/reports/individual_report_screen.dart';
 import 'package:hrv_slope_app/ui/screens/session/session_edit_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
@@ -192,7 +193,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               session.isDraft ? null : _fixed(session.itlIndex, 3),
             ),
             _row('Intensity %', _fixed(session.intensityPercent, 1)),
-            _row('Intensity source', session.intensitySource),
+            _row(
+              'Intensity source',
+              intensitySourceForSlopeLabel(session.intensitySource),
+            ),
+            _row(
+              'Primary intensity metric',
+              primaryIntensityMetricFromMethod(session.intensitySource),
+            ),
             _row(
               'Classification',
               session.isDraft

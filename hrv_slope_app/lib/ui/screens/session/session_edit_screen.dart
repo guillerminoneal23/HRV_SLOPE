@@ -259,6 +259,10 @@ class _SessionEditScreenState extends State<SessionEditScreen> {
                   if (v != null) setState(() => _sessionType = v);
                 },
               ),
+              const Text(
+                'External intensity is used when available. If it is not recorded, internal intensity such as RPE can be used for slope interpretation.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
               ReusableTagTextField(
                 controller: _protocolCtrl,
                 labelText: 'Protocol name',

@@ -209,12 +209,20 @@ const List<InstructionChapter> instructionsChapters = [
       InstructionSection(
         id: 'intensity_percent',
         title: 'intensity_percent requirements',
-        summary:
-            'Intensity percent is required for classification and nomograms.',
+        summary: 'Primary intensity can come from external or internal load.',
         body:
-            'No classification is produced without intensity_percent. The app '
-            'can use direct percent input or derive it from available external '
-            'variables and athlete profile values.',
+            'The app prioritizes external intensity when a valid external '
+            'metric is available. If no valid external metric is recorded, it '
+            'can use internal intensity such as RPE or subjective fatigue for '
+            'slope interpretation. RPE and fatigue are converted from a 0-10 '
+            'scale to a 0-100 intensity percent. No strong intensity-based '
+            'classification is produced when both external and internal '
+            'intensity are unknown.',
+        bullets: [
+          'External intensity is preferred when available.',
+          'Internal intensity is a fallback when external intensity is absent or invalid.',
+          'RPE and fatigue can represent perceived session intensity.',
+        ],
       ),
       InstructionSection(
         id: 'draft_sessions',

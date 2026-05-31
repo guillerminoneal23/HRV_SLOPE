@@ -6,6 +6,7 @@ library;
 
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
+import 'package:hrv_slope_app/shared/engine/intensity_resolver.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 
 class GroupReportData {
@@ -43,6 +44,8 @@ class GroupReportRow {
   final String sessionDate;
   final String? taskName;
   final double? intensityPercent;
+  final String intensitySourceForSlope;
+  final String? primaryIntensityMetric;
   final double? rmssdExercise;
   final double? rmssdRecovery;
   final double? rawSlope;
@@ -63,6 +66,8 @@ class GroupReportRow {
     required this.sessionDate,
     this.taskName,
     this.intensityPercent,
+    this.intensitySourceForSlope = 'Unknown',
+    this.primaryIntensityMetric,
     this.rmssdExercise,
     this.rmssdRecovery,
     this.rawSlope,
@@ -180,6 +185,12 @@ GroupReportData buildGroupReport({
       sessionDate: session.date,
       taskName: session.taskName,
       intensityPercent: session.intensityPercent,
+      intensitySourceForSlope: intensitySourceForSlopeLabel(
+        session.intensitySource,
+      ),
+      primaryIntensityMetric: primaryIntensityMetricFromMethod(
+        session.intensitySource,
+      ),
       rmssdExercise: session.rmssdExercise,
       rmssdRecovery: session.rmssdRecovery,
       rawSlope: session.slopeRaw,

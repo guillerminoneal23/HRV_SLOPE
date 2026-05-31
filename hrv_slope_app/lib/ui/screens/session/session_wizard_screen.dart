@@ -21,13 +21,17 @@ import 'package:hrv_slope_app/ui/widgets/reusable_tag_text_field.dart';
 import 'package:hrv_slope_app/ui/widgets/rr_input_widget.dart';
 
 class SessionWizardScreen extends StatefulWidget {
-  const SessionWizardScreen({super.key});
+  final AppDatabase? database;
+
+  const SessionWizardScreen({super.key, this.database});
+
   @override
   State<SessionWizardScreen> createState() => _SessionWizardScreenState();
 }
 
 class _SessionWizardScreenState extends State<SessionWizardScreen> {
   late final AppDatabase _db;
+  late final bool _ownsDatabase;
   int _step = 0;
 
   // Step 0: Athlete
@@ -74,7 +78,8 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
   @override
   void initState() {
     super.initState();
-    _db = AppDatabase();
+    _db = widget.database ?? AppDatabase();
+    _ownsDatabase = widget.database == null;
     _tagService = ReusableTagService(_db.settingsDao);
     _loadAthletes();
     _loadPreset();
@@ -104,7 +109,9 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
     for (final c in _intCtrls.values) {
       c.dispose();
     }
-    _db.close();
+    if (_ownsDatabase) {
+      _db.close();
+    }
     super.dispose();
   }
 
@@ -164,8 +171,20 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
     return m;
   }
 
-  bool get _hasExternal => _collectValues(_extCtrls).isNotEmpty;
-  bool get _hasInternal => _collectValues(_intCtrls).isNotEmpty;
+  List<String> _validateOptionalNumericValues(
+    Iterable<VariableDefinition> variables,
+    Map<String, TextEditingController> ctrls,
+  ) {
+    final errs = <String>[];
+    for (final variable in variables) {
+      final text = ctrls[variable.name]?.text.trim() ?? '';
+      if (text.isEmpty) continue;
+      if (double.tryParse(text) == null) {
+        errs.add('${variable.label} must be a number');
+      }
+    }
+    return errs;
+  }
 
   List<String> _validateStep(int step) {
     final errs = <String>[];
@@ -182,13 +201,19 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
           errs.add('Session name is required');
         }
       case 2:
-        if (!_hasExternal) {
-          errs.add('At least 1 external load variable required');
-        }
+        errs.addAll(
+          _validateOptionalNumericValues(
+            StandardVariables.externalVariables,
+            _extCtrls,
+          ),
+        );
       case 3:
-        if (!_hasInternal) {
-          errs.add('At least 1 internal load variable required');
-        }
+        errs.addAll(
+          _validateOptionalNumericValues(
+            StandardVariables.internalVariables,
+            _intCtrls,
+          ),
+        );
       case 4:
         if (_hrvMode == HrvInputMode.directRmssd) {
           final v = double.tryParse(_rmssdRecCtrl.text);
@@ -284,6 +309,9 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
           percentMap: ext['percent_map'],
           speedKmh: ext['speed_kmh'],
           powerW: ext['power_w'],
+          rpe110: int_['rpe_1_10'],
+          subjectiveFatigue110: int_['subjective_fatigue_1_10'],
+          percentHrmax: int_['percent_hrmax'],
         ),
         athlete: AthleteReferenceValues(
           masKmh: a.masKmh,
@@ -763,8 +791,13 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Enter at least one',
+          'Optional but recommended',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'External intensity is used when available. If it is not recorded, internal intensity such as RPE can be used for slope interpretation.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
         const SizedBox(height: 12),
         ...StandardVariables.externalVariables.map(
@@ -795,8 +828,13 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Enter at least one',
+          'Optional but recommended',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'External intensity is used when available. If it is not recorded, internal intensity such as RPE can be used for slope interpretation.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
         const SizedBox(height: 12),
         ...StandardVariables.internalVariables.map(
@@ -1040,6 +1078,12 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
             p.intensityPercent?.toStringAsFixed(1) ?? 'NOT RESOLVED',
           ),
           _pRow('Method', p.intensityResolution?.method ?? '-'),
+          _pRow('Source', p.intensitySourceForSlope.label),
+          _pRow('Primary metric', p.primaryIntensityMetric ?? '-'),
+          _pRow(
+            'Internal fallback',
+            p.usedInternalIntensityFallback ? 'yes' : 'no',
+          ),
         ]),
         _previewCard('HRV / RMSSD', [
           _pRow('Input mode', p.hrvInputMode.value),

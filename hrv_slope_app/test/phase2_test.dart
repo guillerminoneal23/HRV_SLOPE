@@ -81,6 +81,86 @@ void main() {
       expect(r.intensityPercent, 90.0);
     });
 
+    test('valid external intensity uses External and no internal fallback', () {
+      final r = resolvePrimaryIntensityForSlope(
+        inputs: const IntensityInputs(percentMas: 85, rpe110: 8),
+        athlete: const AthleteReferenceValues(),
+      );
+
+      expect(r.intensityPercent, 85);
+      expect(r.source, IntensitySourceForSlope.external);
+      expect(r.isFallback, isFalse);
+      expect(r.method, 'direct_percent_mas');
+    });
+
+    test(
+      'without external load, valid RPE uses Internal and scales to 100',
+      () {
+        final r = resolvePrimaryIntensityForSlope(
+          inputs: const IntensityInputs(rpe110: 7),
+          athlete: const AthleteReferenceValues(),
+        );
+
+        expect(r.intensityPercent, 70);
+        expect(r.source, IntensitySourceForSlope.internal);
+        expect(r.isFallback, isTrue);
+        expect(r.method, 'internal_rpe_1_10');
+      },
+    );
+
+    test('fatigue is internal fallback only when RPE is absent', () {
+      final r = resolvePrimaryIntensityForSlope(
+        inputs: const IntensityInputs(subjectiveFatigue110: 6),
+        athlete: const AthleteReferenceValues(),
+      );
+
+      expect(r.intensityPercent, 60);
+      expect(r.source, IntensitySourceForSlope.internal);
+      expect(r.method, 'internal_subjective_fatigue_1_10');
+    });
+
+    test('RPE wins over fatigue in internal hierarchy', () {
+      final r = resolvePrimaryIntensityForSlope(
+        inputs: const IntensityInputs(rpe110: 8, subjectiveFatigue110: 5),
+        athlete: const AthleteReferenceValues(),
+      );
+
+      expect(r.intensityPercent, 80);
+      expect(r.method, 'internal_rpe_1_10');
+    });
+
+    test('external wins when both external and internal are valid', () {
+      final r = resolvePrimaryIntensityForSlope(
+        inputs: const IntensityInputs(percentMap: 78, rpe110: 9),
+        athlete: const AthleteReferenceValues(),
+      );
+
+      expect(r.intensityPercent, 78);
+      expect(r.source, IntensitySourceForSlope.external);
+      expect(r.method, 'direct_percent_map');
+    });
+
+    test('null external plus RPE uses Internal', () {
+      final r = resolvePrimaryIntensityForSlope(
+        inputs: const IntensityInputs(percentMas: null, rpe110: 6),
+        athlete: const AthleteReferenceValues(),
+      );
+
+      expect(r.intensityPercent, 60);
+      expect(r.source, IntensitySourceForSlope.internal);
+    });
+
+    test('zero external plus RPE treats zero as unknown and uses Internal', () {
+      final r = resolvePrimaryIntensityForSlope(
+        inputs: const IntensityInputs(percentMas: 0, rpe110: 6),
+        athlete: const AthleteReferenceValues(),
+      );
+
+      expect(r.intensityPercent, 60);
+      expect(r.source, IntensitySourceForSlope.internal);
+      expect(r.warnings.any((w) => w.contains('percent_mas')), isTrue);
+    });
+
     test('missing reference returns unresolved', () {
       final r = resolveIntensityPercent(
         inputs: const IntensityInputs(speedKmh: 14.0),
@@ -100,6 +180,17 @@ void main() {
       expect(r.intensityPercent, isNull);
       expect(r.canUseNomogram, isFalse);
       expect(r.warnings.any((w) => w.contains('required')), isTrue);
+    });
+
+    test('without external or internal intensity source is Unknown', () {
+      final r = resolvePrimaryIntensityForSlope(
+        inputs: const IntensityInputs(),
+        athlete: const AthleteReferenceValues(),
+      );
+
+      expect(r.intensityPercent, isNull);
+      expect(r.source, IntensitySourceForSlope.unknown);
+      expect(r.canUseNomogram, isFalse);
     });
   });
 
@@ -354,6 +445,30 @@ void main() {
       expect(p.expectedUpper, isNotNull);
       expect(p.residual, isNotNull);
       expect(p.residualPercent, isNotNull);
+    });
+
+    test('preview exposes internal intensity source fallback', () {
+      final p = buildCalculationPreview(
+        athleteName: 'Test',
+        sessionDate: '2024-01-15',
+        externalVariables: const [],
+        internalVariables: const [
+          TaggedVariable(category: 'internal', name: 'rpe_1_10', value: 7),
+        ],
+        intensityResolution: resolvePrimaryIntensityForSlope(
+          inputs: const IntensityInputs(rpe110: 7),
+          athlete: const AthleteReferenceValues(),
+        ),
+        rmssdExercise: 4.0,
+        rmssdRecovery: 19.0,
+        recoveryWindowStartMin: 5,
+        recoveryWindowEndMin: 10,
+      );
+
+      expect(p.intensitySourceForSlope, IntensitySourceForSlope.internal);
+      expect(p.primaryIntensityValue, 70);
+      expect(p.primaryIntensityMetric, 'internal_rpe_1_10');
+      expect(p.usedInternalIntensityFallback, isTrue);
     });
 
     test('classification uses specified nomogram preset', () {

@@ -252,6 +252,7 @@ class _GroupReportScreenState extends State<GroupReportScreen> {
               runSpacing: 6,
               children: [
                 _metric('Intensity', _percent(row.intensityPercent)),
+                _metric('Intensity source', row.intensitySourceForSlope),
                 _metric('RMSSD ex', _ms(row.rmssdExercise)),
                 _metric('RMSSD rec', _ms(row.rmssdRecovery)),
                 _metric('Slope', _fixed(row.interpretedSlope, 3)),

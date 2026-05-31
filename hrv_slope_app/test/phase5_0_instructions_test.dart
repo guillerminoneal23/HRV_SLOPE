@@ -56,6 +56,14 @@ void main() {
       expect(text, contains('Raw RMSSD is always preserved'));
     });
 
+    test('internal intensity fallback explanation appears', () {
+      final text = allInstructionText();
+
+      expect(text, contains('prioritizes external intensity'));
+      expect(text, contains('use internal intensity such as RPE'));
+      expect(text, contains('subjective fatigue'));
+    });
+
     test('forbidden medical diagnostic claims are absent', () {
       final text = allInstructionText().toLowerCase();
 

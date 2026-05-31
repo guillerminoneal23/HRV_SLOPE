@@ -329,6 +329,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
                       'Slope ${_fixed(point.interpretedSlope, 3)}',
                       'ITL ${_fixed(point.itlIndex, 3)}',
                       'Intensity ${_fixed(point.intensityPercent, 1)}%',
+                      point.intensitySourceForSlope,
                       _classLabel(point.classification),
                     ].join(' · '),
                   ),

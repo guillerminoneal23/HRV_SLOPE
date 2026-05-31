@@ -68,6 +68,10 @@ void main() {
       expect(export.content, contains('slope_raw'));
       expect(export.content, contains('slope_interpreted'));
       expect(export.content, contains('rmssd_exercise_is_default'));
+      expect(export.content, contains('intensity_source_for_slope'));
+      expect(export.content, contains('primary_intensity_metric'));
+      expect(export.content, contains('External'));
+      expect(export.content, contains('speed_kmh_div_mas'));
       expect(export.content, contains('expected_lower'));
       expect(export.content, contains('Check context'));
     });
@@ -102,6 +106,8 @@ void main() {
         expect(export.content, contains('srpe'));
         expect(export.content, contains('trimp'));
         expect(export.content, contains('player_load'));
+        expect(export.content, contains('intensity_source_for_slope'));
+        expect(export.content, contains('External'));
         expect(export.content, contains('2026-05-01'));
       },
     );
@@ -308,7 +314,9 @@ IndividualReportData _individualReport() {
       interpretedSlope: 2,
       itlIndex: 0.5,
       intensityPercent: 80,
-      intensitySource: 'speed_mas',
+      intensitySource: 'speed_kmh_div_mas',
+      intensitySourceForSlope: 'External',
+      primaryIntensityMetric: 'speed_kmh_div_mas',
     ),
     nomogramSummary: const NomogramReportSummary(
       presetName: 'excel_operational',
@@ -339,6 +347,8 @@ GroupReportData _groupReport() {
       sessionDate: '2026-05-02',
       taskName: 'Tempo',
       intensityPercent: 80,
+      intensitySourceForSlope: 'External',
+      primaryIntensityMetric: 'direct_percent_mas',
       rmssdExercise: 4,
       rmssdRecovery: 8,
       rawSlope: 0.4,
@@ -398,6 +408,8 @@ LongitudinalSeries _longitudinalSeries() {
       taskName: 'Tempo',
       sessionType: 'training',
       intensityPercent: 80,
+      intensitySourceForSlope: 'External',
+      primaryIntensityMetric: 'direct_percent_mas',
       rawSlope: 0.5,
       interpretedSlope: 0.5,
       itlIndex: 2,
