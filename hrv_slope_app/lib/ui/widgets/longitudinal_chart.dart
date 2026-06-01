@@ -5,15 +5,79 @@ import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 
 class LongitudinalChartPoint {
+  final int? sessionId;
   final String label;
   final double? value;
   final Color? color;
+  final String? tooltip;
 
   const LongitudinalChartPoint({
+    this.sessionId,
     required this.label,
     required this.value,
     this.color,
+    this.tooltip,
   });
+}
+
+class LongitudinalChartYAxisScale {
+  final double minY;
+  final double maxY;
+  final double? interval;
+
+  const LongitudinalChartYAxisScale({
+    required this.minY,
+    required this.maxY,
+    this.interval,
+  });
+}
+
+LongitudinalChartYAxisScale resolveLongitudinalYAxisScale(
+  Iterable<double?> values, {
+  double? yMin,
+  double? yMax,
+  double? yInterval,
+}) {
+  final valid = values.whereType<double>().toList();
+  if (valid.isEmpty) {
+    return LongitudinalChartYAxisScale(
+      minY: yMin ?? 0,
+      maxY: yMax ?? 1,
+      interval: yInterval,
+    );
+  }
+
+  final minValue = valid.reduce((a, b) => a < b ? a : b);
+  final maxValue = valid.reduce((a, b) => a > b ? a : b);
+  final range = (maxValue - minValue).abs();
+  final padding = range == 0 ? _singleValuePadding(maxValue) : range * 0.12;
+
+  var resolvedMin = yMin ?? (minValue < 0 ? minValue - padding : 0);
+  var resolvedMax = yMax ?? (maxValue <= 0 ? 0 : maxValue + padding);
+
+  if ((resolvedMax - resolvedMin).abs() < 1e-9) {
+    resolvedMin -= 1;
+    resolvedMax += 1;
+  }
+
+  return LongitudinalChartYAxisScale(
+    minY: _roundDownAxis(resolvedMin),
+    maxY: _roundUpAxis(resolvedMax),
+    interval: yInterval,
+  );
+}
+
+double resolvePrimaryIntensityOverlayMax(Iterable<double?> values) {
+  final valid = values.whereType<double>().toList();
+  if (valid.isEmpty) return 100;
+  final maxValue = valid.reduce((a, b) => a > b ? a : b);
+  if (maxValue <= 100) return 100;
+  return _roundUpToStep(maxValue, 25);
+}
+
+double resolvePrimaryIntensityOverlayInterval(double maxY) {
+  if (maxY <= 150) return 25;
+  return _roundUpToStep(maxY / 5, 25);
 }
 
 class LongitudinalChart extends StatelessWidget {
@@ -21,6 +85,12 @@ class LongitudinalChart extends StatelessWidget {
   final String valueLabel;
   final List<LongitudinalChartPoint> points;
   final String emptyMessage;
+  final int? selectedSessionId;
+  final ValueChanged<int>? onPointSelected;
+  final String xAxisLabel;
+  final double? yMin;
+  final double? yMax;
+  final double? yInterval;
 
   const LongitudinalChart({
     super.key,
@@ -28,6 +98,12 @@ class LongitudinalChart extends StatelessWidget {
     required this.valueLabel,
     required this.points,
     this.emptyMessage = 'Not enough complete sessions to draw this trend.',
+    this.selectedSessionId,
+    this.onPointSelected,
+    this.xAxisLabel = 'Session order',
+    this.yMin,
+    this.yMax,
+    this.yInterval,
   });
 
   @override
@@ -36,6 +112,12 @@ class LongitudinalChart extends StatelessWidget {
     for (var i = 0; i < points.length; i++) {
       if (points[i].value != null) valid.add((index: i, point: points[i]));
     }
+    final yScale = resolveLongitudinalYAxisScale(
+      points.map((point) => point.value),
+      yMin: yMin,
+      yMax: yMax,
+      yInterval: yInterval,
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -61,8 +143,8 @@ class LongitudinalChart extends StatelessWidget {
                   LineChartData(
                     minX: 0,
                     maxX: (points.length - 1).toDouble(),
-                    minY: 0,
-                    maxY: _maxY(valid),
+                    minY: yScale.minY,
+                    maxY: yScale.maxY,
                     lineBarsData: [
                       LineChartBarData(
                         spots: [
@@ -80,10 +162,13 @@ class LongitudinalChart extends StatelessWidget {
                                   (item) => item.index.toDouble() == spot.x,
                                 )
                                 .point;
+                            final selected =
+                                point.sessionId != null &&
+                                point.sessionId == selectedSessionId;
                             return FlDotCirclePainter(
-                              radius: 4,
+                              radius: selected ? 6 : 4,
                               color: point.color ?? AppColors.tertiary,
-                              strokeWidth: 1,
+                              strokeWidth: selected ? 2 : 1,
                               strokeColor: Colors.white,
                             );
                           },
@@ -109,13 +194,8 @@ class LongitudinalChart extends StatelessWidget {
                         sideTitles: SideTitles(showTitles: false),
                       ),
                       bottomTitles: AxisTitles(
-                        axisNameWidget: const Text(
-                          'Sessions',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
+                        axisNameWidget: const Text(''),
+                        axisNameSize: 0,
                         sideTitles: SideTitles(
                           showTitles: true,
                           reservedSize: 28,
@@ -126,7 +206,9 @@ class LongitudinalChart extends StatelessWidget {
                               return const SizedBox.shrink();
                             }
                             return Text(
-                              '${index + 1}',
+                              xAxisLabel == 'Date'
+                                  ? _shortDate(points[index].label)
+                                  : '${index + 1}',
                               style: const TextStyle(
                                 fontSize: 10,
                                 color: AppColors.textHint,
@@ -138,14 +220,22 @@ class LongitudinalChart extends StatelessWidget {
                       leftTitles: AxisTitles(
                         axisNameWidget: Text(
                           valueLabel,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary,
                           ),
                         ),
-                        sideTitles: const SideTitles(
+                        sideTitles: SideTitles(
                           showTitles: true,
                           reservedSize: 36,
+                          interval: yScale.interval,
+                          getTitlesWidget: (value, _) => Text(
+                            _formatAxis(value),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.textHint,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -156,13 +246,44 @@ class LongitudinalChart extends StatelessWidget {
                         width: 0.5,
                       ),
                     ),
-                    lineTouchData: const LineTouchData(enabled: false),
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipItems: (spots) {
+                          return [
+                            for (final spot in spots)
+                              LineTooltipItem(
+                                _tooltipFor(spot, valid),
+                                const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                ),
+                              ),
+                          ];
+                        },
+                      ),
+                      touchCallback: (event, response) {
+                        if (event is! FlTapDownEvent &&
+                            event is! FlTapUpEvent) {
+                          return;
+                        }
+                        final spot = response?.lineBarSpots?.firstOrNull;
+                        if (spot == null) return;
+                        final point = valid
+                            .firstWhere(
+                              (item) => item.index.toDouble() == spot.x,
+                            )
+                            .point;
+                        final sessionId = point.sessionId;
+                        if (sessionId != null) onPointSelected?.call(sessionId);
+                      },
+                    ),
                   ),
                 ),
               ),
             const SizedBox(height: 8),
-            const Text(
-              'Line: session trend · Dots: available values',
+            Text(
+              'Line: session trend · Dots: available values · X-axis: $xAxisLabel',
               style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
             ),
           ],
@@ -171,11 +292,53 @@ class LongitudinalChart extends StatelessWidget {
     );
   }
 
-  double _maxY(List<({int index, LongitudinalChartPoint point})> valid) {
-    final max = valid
-        .map((item) => item.point.value!)
-        .reduce((a, b) => a > b ? a : b);
-    if (max <= 0) return 1;
-    return max * 1.25;
+  String _tooltipFor(
+    LineBarSpot spot,
+    List<({int index, LongitudinalChartPoint point})> valid,
+  ) {
+    final item = valid.firstWhere((item) => item.index.toDouble() == spot.x);
+    final point = item.point;
+    return point.tooltip ??
+        '${point.label}\n$valueLabel: ${point.value?.toStringAsFixed(2) ?? '-'}';
   }
+
+  String _formatAxis(double value) {
+    if ((value - value.round()).abs() < 1e-9) return value.round().toString();
+    return value.toStringAsFixed(1);
+  }
+
+  String _shortDate(String value) {
+    if (value.length >= 10) return value.substring(5, 10);
+    return value;
+  }
+}
+
+double _singleValuePadding(double value) {
+  final magnitude = value.abs();
+  if (magnitude < 1) return 1;
+  return magnitude * 0.25;
+}
+
+double _roundDownAxis(double value) {
+  if (value >= 0) return value;
+  final step = _axisStep(value.abs());
+  return (value / step).floor() * step;
+}
+
+double _roundUpAxis(double value) {
+  if (value <= 0) return value;
+  final step = _axisStep(value.abs());
+  return (value / step).ceil() * step;
+}
+
+double _axisStep(double magnitude) {
+  if (magnitude <= 1) return 0.1;
+  if (magnitude <= 5) return 0.5;
+  if (magnitude <= 20) return 1;
+  if (magnitude <= 100) return 5;
+  return 25;
+}
+
+double _roundUpToStep(double value, double step) {
+  return (value / step).ceil() * step;
 }

@@ -2,6 +2,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
+import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
@@ -10,7 +11,59 @@ import 'package:hrv_slope_app/ui/screens/reports/individual_report_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/longitudinal_chart.dart';
 
-enum _OverlayMetric { intensity, rpe, srpe, trimp }
+enum _OverlayMetric { intensity, rpe, fatigue, srpe, trimp }
+
+String longitudinalIntensitySourceLabel(String source) {
+  return switch (source) {
+    'External' => 'External load',
+    'Internal' => 'Internal load',
+    'Unknown' => 'Unknown',
+    _ => _humanizeMetricName(source),
+  };
+}
+
+String longitudinalIntensityMetricLabel(String metric) {
+  return switch (metric) {
+    'direct_percent_mas' || 'percent_mas' => '%MAS',
+    'internal_rpe_1_10' || 'rpe_1_10' => 'RPE 1-10',
+    'session_rpe_1_10' => 'Session RPE 1-10',
+    'percent_map' => '%MAP',
+    'percent_vvo2max' || 'percent_vvo2_max' => '%vVO2max',
+    'percent_vam' => '%VAM',
+    'subjective_fatigue_1_10' || 'internal_fatigue_1_10' => 'Fatigue 1-10',
+    'subjective_intensity_1_10' => 'Subjective intensity 1-10',
+    'subjective_intensity_percent' => 'Subjective intensity %',
+    'internal_load_percent' => 'Internal load %',
+    'percent_hrmax' || 'percent_hr_max' => '%HRmax',
+    'speed_kmh' => 'Speed',
+    'power_w' => 'Power',
+    _ => _humanizeMetricName(metric),
+  };
+}
+
+String _humanizeMetricName(String value) {
+  final words = value
+      .replaceAll(RegExp(r'[_-]+'), ' ')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .toList();
+  return words
+      .map((word) {
+        final lower = word.toLowerCase();
+        if (lower == 'rpe') return 'RPE';
+        if (lower == 'itl') return 'ITL';
+        if (lower == 'hrv') return 'HRV';
+        if (lower == 'mas') return 'MAS';
+        if (lower == 'map') return 'MAP';
+        if (lower == 'vam') return 'VAM';
+        if (lower == 'vvo2max') return 'vVO2max';
+        if (lower == 'hrmax') return 'HRmax';
+        if (lower == 'kmh') return 'km/h';
+        return '${lower[0].toUpperCase()}${lower.substring(1)}';
+      })
+      .join(' ');
+}
 
 class AthleteLongitudinalScreen extends StatefulWidget {
   final AppDatabase database;
@@ -30,13 +83,49 @@ class AthleteLongitudinalScreen extends StatefulWidget {
 class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   LongitudinalSeries? _series;
   Athlete? _athlete;
+  List<SessionDetail> _details = [];
   bool _loading = true;
   _OverlayMetric _overlay = _OverlayMetric.intensity;
+  LongitudinalDashboardFilter _filter = const LongitudinalDashboardFilter();
+  LongitudinalXAxisMode _xAxisMode = LongitudinalXAxisMode.sessionOrder;
+  int? _selectedSessionId;
+  final _dateFromController = TextEditingController();
+  final _dateToController = TextEditingController();
+  final _notesController = TextEditingController();
+  final _intensityMinController = TextEditingController();
+  final _intensityMaxController = TextEditingController();
+  final _rpeMinController = TextEditingController();
+  final _rpeMaxController = TextEditingController();
+  final _fatigueMinController = TextEditingController();
+  final _fatigueMaxController = TextEditingController();
+  final _slopeMinController = TextEditingController();
+  final _slopeMaxController = TextEditingController();
+  final _itlMinController = TextEditingController();
+  final _itlMaxController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _syncPendingFields(_filter);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _dateFromController.dispose();
+    _dateToController.dispose();
+    _notesController.dispose();
+    _intensityMinController.dispose();
+    _intensityMaxController.dispose();
+    _rpeMinController.dispose();
+    _rpeMaxController.dispose();
+    _fatigueMinController.dispose();
+    _fatigueMaxController.dispose();
+    _slopeMinController.dispose();
+    _slopeMaxController.dispose();
+    _itlMinController.dispose();
+    _itlMaxController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -49,14 +138,140 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     }
     final details = await widget.database.sessionsDao
         .getSessionDetailsForAthlete(widget.athleteId);
-    final series = buildLongitudinalSeries(athlete: athlete, details: details);
+    final series = buildLongitudinalSeries(
+      athlete: athlete,
+      details: details,
+      filter: _filter,
+    );
     if (mounted) {
       setState(() {
         _athlete = athlete;
+        _details = details;
         _series = series;
         _loading = false;
       });
     }
+  }
+
+  void _applyFilter(LongitudinalDashboardFilter filter) {
+    final athlete = _athlete;
+    if (athlete == null) return;
+    final series = buildLongitudinalSeries(
+      athlete: athlete,
+      details: _details,
+      filter: filter,
+    );
+    setState(() {
+      _filter = filter;
+      _series = series;
+      if (!series.points.any(
+        (point) => point.sessionId == _selectedSessionId,
+      )) {
+        _selectedSessionId = null;
+      }
+    });
+  }
+
+  void _clearFilters() {
+    final cleared = _filter.clear();
+    _syncPendingFields(cleared);
+    _applyFilter(cleared);
+  }
+
+  void _applyPendingFilter() {
+    _applyFilter(
+      _filter.copyWith(
+        dateFrom: _trimmedOrNull(_dateFromController.text),
+        clearDateFrom: _trimmedOrNull(_dateFromController.text) == null,
+        dateTo: _trimmedOrNull(_dateToController.text),
+        clearDateTo: _trimmedOrNull(_dateToController.text) == null,
+        notesTextSearch: _trimmedOrNull(_notesController.text),
+        clearNotesTextSearch: _trimmedOrNull(_notesController.text) == null,
+        intensityValueMin: _parseNullableDouble(_intensityMinController.text),
+        clearIntensityValueMin:
+            _parseNullableDouble(_intensityMinController.text) == null,
+        intensityValueMax: _parseNullableDouble(_intensityMaxController.text),
+        clearIntensityValueMax:
+            _parseNullableDouble(_intensityMaxController.text) == null,
+        rpeMin: _parseNullableDouble(_rpeMinController.text),
+        clearRpeMin: _parseNullableDouble(_rpeMinController.text) == null,
+        rpeMax: _parseNullableDouble(_rpeMaxController.text),
+        clearRpeMax: _parseNullableDouble(_rpeMaxController.text) == null,
+        fatigueMin: _parseNullableDouble(_fatigueMinController.text),
+        clearFatigueMin:
+            _parseNullableDouble(_fatigueMinController.text) == null,
+        fatigueMax: _parseNullableDouble(_fatigueMaxController.text),
+        clearFatigueMax:
+            _parseNullableDouble(_fatigueMaxController.text) == null,
+        slopeMin: _parseNullableDouble(_slopeMinController.text),
+        clearSlopeMin: _parseNullableDouble(_slopeMinController.text) == null,
+        slopeMax: _parseNullableDouble(_slopeMaxController.text),
+        clearSlopeMax: _parseNullableDouble(_slopeMaxController.text) == null,
+        itlMin: _parseNullableDouble(_itlMinController.text),
+        clearItlMin: _parseNullableDouble(_itlMinController.text) == null,
+        itlMax: _parseNullableDouble(_itlMaxController.text),
+        clearItlMax: _parseNullableDouble(_itlMaxController.text) == null,
+      ),
+    );
+  }
+
+  void _syncPendingFields(LongitudinalDashboardFilter filter) {
+    _dateFromController.text = filter.dateFrom ?? '';
+    _dateToController.text = filter.dateTo ?? '';
+    _notesController.text = filter.notesTextSearch ?? '';
+    _intensityMinController.text = _fieldNumber(filter.intensityValueMin);
+    _intensityMaxController.text = _fieldNumber(filter.intensityValueMax);
+    _rpeMinController.text = _fieldNumber(filter.rpeMin);
+    _rpeMaxController.text = _fieldNumber(filter.rpeMax);
+    _fatigueMinController.text = _fieldNumber(filter.fatigueMin);
+    _fatigueMaxController.text = _fieldNumber(filter.fatigueMax);
+    _slopeMinController.text = _fieldNumber(filter.slopeMin);
+    _slopeMaxController.text = _fieldNumber(filter.slopeMax);
+    _itlMinController.text = _fieldNumber(filter.itlMin);
+    _itlMaxController.text = _fieldNumber(filter.itlMax);
+  }
+
+  String _visibleActiveFilterLabel(String label) {
+    if (label.startsWith('Intensity source: ')) {
+      return _mapFilterValues(
+        label,
+        'Intensity source: ',
+        longitudinalIntensitySourceLabel,
+      );
+    }
+    if (label.startsWith('Intensity metric: ')) {
+      return _mapFilterValues(
+        label,
+        'Metric used for slope: ',
+        longitudinalIntensityMetricLabel,
+      );
+    }
+    if (label.startsWith('Intensity: ')) {
+      return label.replaceFirst(
+        'Intensity: ',
+        'Primary intensity used for slope (%): ',
+      );
+    }
+    return label;
+  }
+
+  String _mapFilterValues(
+    String label,
+    String visiblePrefix,
+    String Function(String value) displayLabel,
+  ) {
+    final rawValues = label.substring(label.indexOf(':') + 1).trim();
+    final values = rawValues
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .map(displayLabel)
+        .join(', ');
+    return '$visiblePrefix$values';
+  }
+
+  void _selectSession(int sessionId) {
+    setState(() => _selectedSessionId = sessionId);
   }
 
   @override
@@ -72,6 +287,9 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         body: const Center(child: Text('Athlete not found')),
       );
     }
+    final intensityOverlayMax = resolvePrimaryIntensityOverlayMax(
+      series.points.map((point) => point.primaryIntensityValue),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -88,58 +306,103 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           _header(athlete, series),
+          _filtersPanel(series),
           _summary(series),
-          LongitudinalChart(
-            title: 'Slope Trend',
-            valueLabel: 'Slope',
-            points: [
-              for (final point in series.points)
-                LongitudinalChartPoint(
-                  label: point.date,
-                  value: point.interpretedSlope,
-                  color: _classificationColor(point.classification),
-                ),
-            ],
-          ),
-          LongitudinalChart(
-            title: 'ITL Trend',
-            valueLabel: 'ITL',
-            points: [
-              for (final point in series.points)
-                LongitudinalChartPoint(
-                  label: point.date,
-                  value: point.itlIndex,
-                  color: AppColors.tertiary,
-                ),
-            ],
-            emptyMessage: 'No ITL values available for this athlete yet.',
-          ),
-          _overlaySelector(),
-          LongitudinalChart(
-            title: _overlayTitle(),
-            valueLabel: _overlayLabel(),
-            points: [
-              for (final point in series.points)
-                LongitudinalChartPoint(
-                  label: point.date,
-                  value: _overlayValue(point),
-                  color: AppColors.secondary,
-                ),
-            ],
-            emptyMessage: 'No values available for this selected overlay.',
-          ),
-          _residuals(series),
-          _flags(series),
-          _sessionList(series),
+          _dataCompleteness(series),
+          if (series.points.isEmpty)
+            _emptyFilteredState(series)
+          else ...[
+            _xAxisSelector(),
+            LongitudinalChart(
+              title: 'Slope Trend',
+              valueLabel: 'Slope',
+              points: [
+                for (final point in series.points)
+                  _chartPoint(
+                    point,
+                    value: point.interpretedSlope,
+                    color: _classificationColor(point.classification),
+                  ),
+              ],
+              selectedSessionId: _selectedSessionId,
+              onPointSelected: _selectSession,
+              xAxisLabel: _xAxisLabel,
+            ),
+            LongitudinalChart(
+              title: 'ITL Trend',
+              valueLabel: 'ITL',
+              points: [
+                for (final point in series.points)
+                  _chartPoint(
+                    point,
+                    value: point.itlIndex,
+                    color: AppColors.tertiary,
+                  ),
+              ],
+              selectedSessionId: _selectedSessionId,
+              onPointSelected: _selectSession,
+              xAxisLabel: _xAxisLabel,
+              emptyMessage: 'No ITL values available for this athlete yet.',
+            ),
+            _overlaySelector(),
+            LongitudinalChart(
+              title: _overlayTitle(),
+              valueLabel: _overlayLabel(),
+              points: [
+                for (final point in series.points)
+                  _chartPoint(
+                    point,
+                    value: _overlayValue(point),
+                    color: AppColors.secondary,
+                  ),
+              ],
+              selectedSessionId: _selectedSessionId,
+              onPointSelected: _selectSession,
+              xAxisLabel: _xAxisLabel,
+              yMin: _overlay == _OverlayMetric.intensity ? 0 : null,
+              yMax: _overlay == _OverlayMetric.intensity
+                  ? intensityOverlayMax
+                  : null,
+              yInterval: _overlay == _OverlayMetric.intensity
+                  ? resolvePrimaryIntensityOverlayInterval(intensityOverlayMax)
+                  : null,
+              emptyMessage: 'No values available for this selected overlay.',
+            ),
+            LongitudinalChart(
+              title: 'Residual Trend',
+              valueLabel: 'Residual',
+              points: [
+                for (final point in series.points)
+                  _chartPoint(
+                    point,
+                    value: point.residual,
+                    color: point.residual != null && point.residual! < 0
+                        ? AppColors.warning
+                        : AppColors.success,
+                  ),
+              ],
+              selectedSessionId: _selectedSessionId,
+              onPointSelected: _selectSession,
+              xAxisLabel: _xAxisLabel,
+              emptyMessage:
+                  'Residuals require intensity percent and interpreted slope.',
+            ),
+            if (_selectedPoint(series) != null) _selectedSession(series),
+            _flags(series),
+            _sessionList(series),
+          ],
         ],
       ),
     );
   }
 
   Widget _header(Athlete athlete, LongitudinalSeries series) {
-    final dateRange = series.points.isEmpty
+    final sourcePoints = series.allPoints.isEmpty
+        ? series.points
+        : series.allPoints;
+    final dateRange = sourcePoints.isEmpty
         ? 'No sessions'
-        : '${series.points.first.date} to ${series.points.last.date}';
+        : '${sourcePoints.first.date} to ${sourcePoints.last.date}';
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -158,7 +421,10 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               ),
             const Divider(height: 20),
             _row('Date range', dateRange),
-            _row('Sessions', '${series.summary.nSessions}'),
+            _row(
+              'Sessions',
+              '${series.completeness.includedSessions} of ${series.completeness.totalSessions}',
+            ),
             _row('Complete sessions', '${series.summary.nComplete}'),
             const SizedBox(height: 12),
             Align(
@@ -180,6 +446,348 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         ),
       ),
     );
+  }
+
+  Widget _filtersPanel(LongitudinalSeries series) {
+    final options = series.filterOptions;
+    final labels = series.activeFilterLabels;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ExpansionTile(
+        initiallyExpanded: _filter.activeFilterCount > 0,
+        title: Text('Filters (${_filter.activeFilterCount})'),
+        subtitle: labels.isEmpty
+            ? const Text('Compare similar sessions')
+            : Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final label in labels)
+                    Chip(label: Text(_visibleActiveFilterLabel(label))),
+                ],
+              ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          _filterActions(),
+          CheckboxListTile(
+            value: _filter.comparableSessionsOnly,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Comparable sessions only'),
+            subtitle: const Text(
+              'Comparable mode uses the latest included session as reference.',
+            ),
+            onChanged: (value) => _applyFilter(
+              _filter.copyWith(comparableSessionsOnly: value ?? false),
+            ),
+          ),
+          if (_filter.comparableSessionsOnly)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '${series.comparableIncludedCount} of ${series.comparableTotalCount} sessions match comparable criteria.',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+          _filterSection(
+            title: 'Session similarity',
+            help:
+                'Use these filters to compare sessions with similar sport, task, protocol, and context.',
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _dateFromController,
+                      decoration: InputDecoration(
+                        labelText: 'Date from',
+                        hintText: options.dateMin ?? 'YYYY-MM-DD',
+                      ),
+                      onEditingComplete: _applyPendingFilter,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _dateToController,
+                      decoration: InputDecoration(
+                        labelText: 'Date to',
+                        hintText: options.dateMax ?? 'YYYY-MM-DD',
+                      ),
+                      onEditingComplete: _applyPendingFilter,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _filterGroup('Sport', options.sports, _filter.sports, (values) {
+                _applyFilter(_filter.copyWith(sports: values));
+              }),
+              _filterGroup(
+                'Session task/name',
+                options.sessionTasks,
+                _filter.sessionTasks,
+                (values) {
+                  _applyFilter(_filter.copyWith(sessionTasks: values));
+                },
+              ),
+              _filterGroup(
+                'Session type',
+                options.sessionTypes,
+                _filter.sessionTypes,
+                (values) {
+                  _applyFilter(_filter.copyWith(sessionTypes: values));
+                },
+              ),
+              _filterGroup(
+                'Protocol name',
+                options.protocolNames,
+                _filter.protocolNames,
+                (values) {
+                  _applyFilter(_filter.copyWith(protocolNames: values));
+                },
+              ),
+              _filterGroup(
+                'Context / Environment',
+                options.contextEnvironmentTags,
+                _filter.contextEnvironmentTags,
+                (values) {
+                  _applyFilter(
+                    _filter.copyWith(contextEnvironmentTags: values),
+                  );
+                },
+              ),
+              TextFormField(
+                controller: _notesController,
+                decoration: const InputDecoration(labelText: 'Notes contains'),
+                onEditingComplete: _applyPendingFilter,
+              ),
+            ],
+          ),
+          _filterSection(
+            title: 'Intensity used for slope',
+            help:
+                'External load is used when available. If it is missing, internal load such as RPE or subjective fatigue can be used for slope interpretation.',
+            children: [
+              _filterGroup(
+                'Source used for slope',
+                options.intensitySourcesForSlope,
+                _filter.intensitySourcesForSlope,
+                (values) {
+                  _applyFilter(
+                    _filter.copyWith(intensitySourcesForSlope: values),
+                  );
+                },
+                displayLabel: longitudinalIntensitySourceLabel,
+              ),
+              _filterGroup(
+                'Metric used for slope',
+                options.intensityMetricNames,
+                _filter.intensityMetricNames,
+                (values) {
+                  _applyFilter(_filter.copyWith(intensityMetricNames: values));
+                },
+                displayLabel: longitudinalIntensityMetricLabel,
+              ),
+              _rangeFields(
+                label: 'Primary intensity used for slope (%)',
+                minController: _intensityMinController,
+                maxController: _intensityMaxController,
+              ),
+            ],
+          ),
+          _filterSection(
+            title: 'Subjective response',
+            help:
+                'These filters use the original subjective values, not the normalized primary intensity.',
+            children: [
+              _rangeFields(
+                label: 'RPE 1-10',
+                minController: _rpeMinController,
+                maxController: _rpeMaxController,
+              ),
+              _rangeFields(
+                label: 'Fatigue 1-10',
+                minController: _fatigueMinController,
+                maxController: _fatigueMaxController,
+              ),
+            ],
+          ),
+          _filterSection(
+            title: 'Recovery response',
+            help:
+                'Use these filters to inspect sessions with similar recovery-response outcomes.',
+            children: [
+              _rangeFields(
+                label: 'Slope',
+                minController: _slopeMinController,
+                maxController: _slopeMaxController,
+              ),
+              _rangeFields(
+                label: 'ITL',
+                minController: _itlMinController,
+                maxController: _itlMaxController,
+              ),
+            ],
+          ),
+          _filterSection(
+            title: 'Advanced filters',
+            children: [
+              _filterGroup(
+                'HRV input mode',
+                options.hrvInputModes,
+                _filter.hrvInputModes,
+                (values) {
+                  _applyFilter(_filter.copyWith(hrvInputModes: values));
+                },
+              ),
+              _filterGroup(
+                'Recovery window',
+                options.recoveryWindows,
+                _filter.recoveryWindows,
+                (values) {
+                  _applyFilter(_filter.copyWith(recoveryWindows: values));
+                },
+              ),
+            ],
+          ),
+          _filterActions(),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterGroup(
+    String label,
+    Set<String> options,
+    Set<String> selected,
+    ValueChanged<Set<String>> onChanged, {
+    String Function(String value)? displayLabel,
+  }) {
+    if (options.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Wrap(
+            alignment: WrapAlignment.start,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final option in options)
+                FilterChip(
+                  label: Text(displayLabel?.call(option) ?? option),
+                  selected: selected.contains(option),
+                  onSelected: (_) => onChanged(_toggleValue(selected, option)),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterSection({
+    required String title,
+    String? help,
+    required List<Widget> children,
+  }) {
+    final visibleChildren = children
+        .where((child) => child is! SizedBox || child.width != 0)
+        .toList();
+    if (visibleChildren.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(height: 20),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+          if (help != null) ...[
+            const SizedBox(height: 4),
+            Text(help, style: const TextStyle(color: AppColors.textSecondary)),
+          ],
+          const SizedBox(height: 12),
+          ...visibleChildren,
+        ],
+      ),
+    );
+  }
+
+  Widget _filterActions() {
+    final hasActiveFilters = _filter.activeFilterCount > 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (hasActiveFilters)
+            TextButton.icon(
+              onPressed: _clearFilters,
+              icon: const Icon(Icons.clear),
+              label: const Text('Clear filters'),
+            ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: _applyPendingFilter,
+            icon: const Icon(Icons.check),
+            label: const Text('Apply filters'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rangeFields({
+    required String label,
+    required TextEditingController minController,
+    required TextEditingController maxController,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 135,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            child: TextFormField(
+              controller: minController,
+              decoration: const InputDecoration(labelText: 'Min'),
+              keyboardType: TextInputType.number,
+              onEditingComplete: _applyPendingFilter,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextFormField(
+              controller: maxController,
+              decoration: const InputDecoration(labelText: 'Max'),
+              keyboardType: TextInputType.number,
+              onEditingComplete: _applyPendingFilter,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Set<String> _toggleValue(Set<String> values, String value) {
+    final next = Set<String>.from(values);
+    if (!next.add(value)) next.remove(value);
+    return next;
   }
 
   Widget _summary(LongitudinalSeries series) {
@@ -204,6 +812,86 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     );
   }
 
+  Widget _dataCompleteness(LongitudinalSeries series) {
+    final c = series.completeness;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _metric(
+              'Included / total',
+              '${c.includedSessions}/${c.totalSessions}',
+            ),
+            _metric('With slope', '${c.withSlope}'),
+            _metric('With ITL', '${c.withItl}'),
+            _metric('External intensity', '${c.withExternalIntensity}'),
+            _metric('Internal fallback', '${c.withInternalFallback}'),
+            _metric('With RPE', '${c.withRpe}'),
+            _metric('With fatigue', '${c.withFatigue}'),
+            _metric('Missing key data', '${c.missingKeyData}'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyFilteredState(LongitudinalSeries series) {
+    final hasActiveFilters = !series.filter.isEmpty;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Text(
+              hasActiveFilters
+                  ? 'No sessions match the selected filters.'
+                  : 'Not enough complete sessions to draw this trend.',
+            ),
+            if (hasActiveFilters) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () => _applyFilter(_filter.clear()),
+                icon: const Icon(Icons.clear),
+                label: const Text('Clear filters'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _xAxisSelector() {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: DropdownButtonFormField<LongitudinalXAxisMode>(
+          initialValue: _xAxisMode,
+          decoration: const InputDecoration(labelText: 'X-axis'),
+          items: const [
+            DropdownMenuItem(
+              value: LongitudinalXAxisMode.sessionOrder,
+              child: Text('Session order'),
+            ),
+            DropdownMenuItem(
+              value: LongitudinalXAxisMode.date,
+              child: Text('Date'),
+            ),
+          ],
+          onChanged: (value) {
+            if (value != null) setState(() => _xAxisMode = value);
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _overlaySelector() {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -211,13 +899,17 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         padding: const EdgeInsets.all(16),
         child: DropdownButtonFormField<_OverlayMetric>(
           initialValue: _overlay,
-          decoration: const InputDecoration(labelText: 'Load overlay'),
+          decoration: const InputDecoration(labelText: 'Overlay metric'),
           items: const [
             DropdownMenuItem(
               value: _OverlayMetric.intensity,
-              child: Text('Intensity percent'),
+              child: Text('Primary intensity (%)'),
             ),
             DropdownMenuItem(value: _OverlayMetric.rpe, child: Text('RPE')),
+            DropdownMenuItem(
+              value: _OverlayMetric.fatigue,
+              child: Text('Fatigue'),
+            ),
             DropdownMenuItem(value: _OverlayMetric.srpe, child: Text('sRPE')),
             DropdownMenuItem(value: _OverlayMetric.trimp, child: Text('TRIMP')),
           ],
@@ -229,8 +921,9 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     );
   }
 
-  Widget _residuals(LongitudinalSeries series) {
-    final hasResiduals = series.points.any((point) => point.residual != null);
+  Widget _selectedSession(LongitudinalSeries series) {
+    final point = _selectedPoint(series);
+    if (point == null) return const SizedBox.shrink();
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -239,26 +932,19 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Residual Trend',
+              'Selected session',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            if (!hasResiduals)
-              const Text(
-                'Residuals require intensity percent and interpreted slope.',
-                style: TextStyle(color: AppColors.textHint),
-              )
-            else
-              for (final point in series.points)
-                if (point.residual != null)
-                  _row(
-                    point.date,
-                    '${point.residual!.toStringAsFixed(3)} '
-                    '(${point.residualPercent!.toStringAsFixed(1)}%)',
-                    valueColor: point.residual! < 0
-                        ? AppColors.warning
-                        : AppColors.textPrimary,
-                  ),
+            _sessionDetails(point),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => _openReport(point.sessionId),
+                child: const Text('Open report'),
+              ),
+            ),
           ],
         ),
       ),
@@ -313,48 +999,106 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            if (series.points.isEmpty)
-              const Text(
-                'No sessions yet.',
-                style: TextStyle(color: AppColors.textHint),
-              )
-            else
-              for (final point in series.points)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
+            for (final point in series.points)
+              Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                color: point.sessionId == _selectedSessionId
+                    ? AppColors.primary.withValues(alpha: 0.06)
+                    : null,
+                child: ListTile(
+                  onTap: () => _selectSession(point.sessionId),
                   title: Text(point.taskName ?? point.date),
-                  subtitle: Text(
-                    [
-                      point.date,
-                      'Slope ${_fixed(point.interpretedSlope, 3)}',
-                      'ITL ${_fixed(point.itlIndex, 3)}',
-                      'Intensity ${_fixed(point.intensityPercent, 1)}%',
-                      point.intensitySourceForSlope,
-                      _classLabel(point.classification),
-                    ].join(' · '),
-                  ),
+                  subtitle: _sessionDetails(point),
                   trailing: TextButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => IndividualReportScreen(
-                          database: widget.database,
-                          sessionId: point.sessionId,
-                        ),
-                      ),
-                    ),
-                    child: const Text('Open Report'),
+                    onPressed: () => _openReport(point.sessionId),
+                    child: const Text('Open report'),
                   ),
                 ),
+              ),
           ],
         ),
       ),
     );
   }
 
+  Widget _sessionDetails(LongitudinalPoint point) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 4,
+      children: [
+        Text('Date ${point.date}'),
+        if (point.sport != null) Text('Sport ${point.sport}'),
+        if (point.sessionType != null) Text('Type ${point.sessionType}'),
+        if (point.protocolName != null) Text('Protocol ${point.protocolName}'),
+        if (point.contextEnvironment != null)
+          Text('Context ${point.contextEnvironment}'),
+        Text('Slope ${_fixed(point.interpretedSlope, 3)}'),
+        Text('ITL ${_fixed(point.itlIndex, 3)}'),
+        Text('Primary intensity ${_fixed(point.primaryIntensityValue, 1)}%'),
+        Text(
+          'Source ${longitudinalIntensitySourceLabel(point.intensitySourceForSlope)}',
+        ),
+        Text(
+          'Metric ${point.primaryIntensityMetric == null ? '-' : longitudinalIntensityMetricLabel(point.primaryIntensityMetric!)}',
+        ),
+        Text('RPE ${_fixed(point.rpe, 1)}'),
+        Text('Fatigue ${_fixed(point.fatigue, 1)}'),
+        if (point.classification != null)
+          Text(_classLabel(point.classification)),
+      ],
+    );
+  }
+
+  LongitudinalChartPoint _chartPoint(
+    LongitudinalPoint point, {
+    required double? value,
+    required Color color,
+  }) {
+    return LongitudinalChartPoint(
+      sessionId: point.sessionId,
+      label: point.date,
+      value: value,
+      color: color,
+      tooltip: _tooltip(point),
+    );
+  }
+
+  String _tooltip(LongitudinalPoint point) {
+    final notes = point.notes == null ? null : _shortText(point.notes!, 90);
+    return [
+      point.date,
+      point.taskName ?? 'Session',
+      if (point.sport != null) 'Sport: ${point.sport}',
+      if (point.sessionType != null) 'Type: ${point.sessionType}',
+      if (point.protocolName != null) 'Protocol: ${point.protocolName}',
+      if (point.contextEnvironment != null)
+        'Context: ${point.contextEnvironment}',
+      'Slope: ${_fixed(point.interpretedSlope, 3)}',
+      'ITL: ${_fixed(point.itlIndex, 3)}',
+      'Intensity: ${_fixed(point.primaryIntensityValue, 1)}%',
+      'Metric: ${point.primaryIntensityMetric == null ? '-' : longitudinalIntensityMetricLabel(point.primaryIntensityMetric!)}',
+      'Source: ${longitudinalIntensitySourceLabel(point.intensitySourceForSlope)}',
+      'RPE: ${_fixed(point.rpe, 1)}',
+      'Fatigue: ${_fixed(point.fatigue, 1)}',
+      'Class: ${_classLabel(point.classification)}',
+      if (notes != null) 'Notes: $notes',
+    ].join('\n');
+  }
+
+  LongitudinalPoint? _selectedPoint(LongitudinalSeries series) {
+    final id = _selectedSessionId;
+    if (id == null) return null;
+    for (final point in series.points) {
+      if (point.sessionId == id) return point;
+    }
+    return null;
+  }
+
   String _overlayTitle() {
     return switch (_overlay) {
       _OverlayMetric.intensity => 'Intensity Overlay',
       _OverlayMetric.rpe => 'RPE Overlay',
+      _OverlayMetric.fatigue => 'Fatigue Overlay',
       _OverlayMetric.srpe => 'sRPE Overlay',
       _OverlayMetric.trimp => 'TRIMP Overlay',
     };
@@ -362,8 +1106,9 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
 
   String _overlayLabel() {
     return switch (_overlay) {
-      _OverlayMetric.intensity => 'Intensity %',
+      _OverlayMetric.intensity => 'Primary intensity (%)',
       _OverlayMetric.rpe => 'RPE',
+      _OverlayMetric.fatigue => 'Fatigue',
       _OverlayMetric.srpe => 'sRPE',
       _OverlayMetric.trimp => 'TRIMP',
     };
@@ -371,11 +1116,30 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
 
   double? _overlayValue(LongitudinalPoint point) {
     return switch (_overlay) {
-      _OverlayMetric.intensity => point.intensityPercent,
+      _OverlayMetric.intensity => point.primaryIntensityValue,
       _OverlayMetric.rpe => point.rpe,
+      _OverlayMetric.fatigue => point.fatigue,
       _OverlayMetric.srpe => point.srpe,
       _OverlayMetric.trimp => point.trimp,
     };
+  }
+
+  String get _xAxisLabel {
+    return switch (_xAxisMode) {
+      LongitudinalXAxisMode.sessionOrder => 'Session order',
+      LongitudinalXAxisMode.date => 'Date',
+    };
+  }
+
+  void _openReport(int sessionId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => IndividualReportScreen(
+          database: widget.database,
+          sessionId: sessionId,
+        ),
+      ),
+    );
   }
 
   Future<void> _exportCsv() async {
@@ -427,8 +1191,30 @@ Widget _row(String label, String value, {Color? valueColor}) {
   );
 }
 
+double? _parseNullableDouble(String value) {
+  final text = value.trim();
+  if (text.isEmpty) return null;
+  return double.tryParse(text);
+}
+
+String? _trimmedOrNull(String value) {
+  final text = value.trim();
+  return text.isEmpty ? null : text;
+}
+
+String _fieldNumber(double? value) {
+  if (value == null) return '';
+  if ((value - value.round()).abs() < 1e-9) return value.round().toString();
+  return value.toString();
+}
+
 String _fixed(double? value, int digits) =>
     value == null ? '-' : value.toStringAsFixed(digits);
+
+String _shortText(String value, int maxLength) {
+  if (value.length <= maxLength) return value;
+  return '${value.substring(0, maxLength)}...';
+}
 
 String _trendLabel(LongitudinalTrendDirection direction) {
   switch (direction) {

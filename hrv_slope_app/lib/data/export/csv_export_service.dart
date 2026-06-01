@@ -275,12 +275,16 @@ CsvExportData exportGroupReportSummaryCsv(GroupReportData data) {
 
 CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
   const headers = [
+    'filter_summary',
     'athlete_id',
     'athlete_name',
     'session_id',
     'date',
     'task_name',
+    'sport',
     'session_type',
+    'protocol_name',
+    'context_environment',
     'intensity_percent',
     'intensity_source_for_slope',
     'primary_intensity_value',
@@ -292,10 +296,12 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
     'residual_percent',
     'classification',
     'rpe',
+    'fatigue',
     'srpe',
     'trimp',
     'primary_external_load_name',
     'primary_external_load_value',
+    'notes',
     'slope_rolling_7',
     'slope_rolling_14',
     'slope_rolling_28',
@@ -304,18 +310,27 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
     'itl_rolling_28',
     'warnings',
   ];
-  final rows = [
+  final filterSummary = series.activeFilterLabels.isEmpty
+      ? 'No filters'
+      : series.activeFilterLabels.join('; ');
+  final rows = <List<Object?>>[
+    if (series.points.isEmpty && series.activeFilterLabels.isNotEmpty)
+      _emptyLongitudinalMetadataRow(series, filterSummary),
     for (var i = 0; i < series.points.length; i++)
       [
+        filterSummary,
         series.athleteId,
         series.athleteName,
         series.points[i].sessionId,
         series.points[i].date,
         series.points[i].taskName,
+        series.points[i].sport,
         series.points[i].sessionType,
+        series.points[i].protocolName,
+        series.points[i].contextEnvironment,
         series.points[i].intensityPercent,
         series.points[i].intensitySourceForSlope,
-        series.points[i].intensityPercent,
+        series.points[i].primaryIntensityValue,
         series.points[i].primaryIntensityMetric,
         series.points[i].rawSlope,
         series.points[i].interpretedSlope,
@@ -324,10 +339,12 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
         series.points[i].residualPercent,
         series.points[i].classification,
         series.points[i].rpe,
+        series.points[i].fatigue,
         series.points[i].srpe,
         series.points[i].trimp,
         series.points[i].primaryExternalLoadName,
         series.points[i].primaryExternalLoadValue,
+        series.points[i].notes,
         series.slopeRolling7[i],
         series.slopeRolling14[i],
         series.slopeRolling28[i],
@@ -345,6 +362,49 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
     exportType: ExportDatasetType.longitudinalAthlete,
     warnings: series.points.expand((point) => point.warnings).toList(),
   );
+}
+
+List<Object?> _emptyLongitudinalMetadataRow(
+  LongitudinalSeries series,
+  String filterSummary,
+) {
+  return [
+    filterSummary,
+    series.athleteId,
+    series.athleteName,
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+  ];
 }
 
 CsvExportData exportLongitudinalFatigueFlagsCsv(LongitudinalSeries series) {

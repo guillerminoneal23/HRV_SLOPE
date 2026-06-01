@@ -1,7 +1,8 @@
 /// Athlete longitudinal dashboard data builder.
 ///
 /// This pure builder turns loaded session details into chronologically sorted
-/// trend data, rolling averages, summary values, and training-load flags.
+/// trend data, rolling averages, summary values, comparable-session filtering,
+/// and training-load flags.
 library;
 
 import 'package:hrv_slope_app/data/database/app_database.dart';
@@ -25,12 +26,375 @@ enum LongitudinalTrendDirection {
   insufficientData,
 }
 
+enum LongitudinalXAxisMode { sessionOrder, date }
+
+class LongitudinalRange {
+  final double? min;
+  final double? max;
+
+  const LongitudinalRange({this.min, this.max});
+
+  bool get isEmpty => min == null && max == null;
+
+  bool contains(double? value) {
+    if (isEmpty) return true;
+    if (value == null) return false;
+    if (min != null && value < min!) return false;
+    if (max != null && value > max!) return false;
+    return true;
+  }
+}
+
+class LongitudinalDashboardFilter {
+  final String? dateFrom;
+  final String? dateTo;
+  final Set<String> sports;
+  final Set<String> sessionTypes;
+  final Set<String> sessionTasks;
+  final Set<String> protocolNames;
+  final Set<String> contextEnvironmentTags;
+  final Set<String> intensitySourcesForSlope;
+  final Set<String> intensityMetricNames;
+  final double? intensityValueMin;
+  final double? intensityValueMax;
+  final double? rpeMin;
+  final double? rpeMax;
+  final double? fatigueMin;
+  final double? fatigueMax;
+  final double? slopeMin;
+  final double? slopeMax;
+  final double? itlMin;
+  final double? itlMax;
+  final Set<String> hrvInputModes;
+  final Set<String> recoveryWindows;
+  final String? notesTextSearch;
+  final bool onlyCompleteSessions;
+  final bool comparableSessionsOnly;
+
+  const LongitudinalDashboardFilter({
+    this.dateFrom,
+    this.dateTo,
+    this.sports = const {},
+    this.sessionTypes = const {},
+    this.sessionTasks = const {},
+    this.protocolNames = const {},
+    this.contextEnvironmentTags = const {},
+    this.intensitySourcesForSlope = const {},
+    this.intensityMetricNames = const {},
+    this.intensityValueMin,
+    this.intensityValueMax,
+    this.rpeMin,
+    this.rpeMax,
+    this.fatigueMin,
+    this.fatigueMax,
+    this.slopeMin,
+    this.slopeMax,
+    this.itlMin,
+    this.itlMax,
+    this.hrvInputModes = const {},
+    this.recoveryWindows = const {},
+    this.notesTextSearch,
+    this.onlyCompleteSessions = false,
+    this.comparableSessionsOnly = false,
+  });
+
+  bool get isEmpty => activeFilterCount == 0;
+
+  int get activeFilterCount {
+    var count = 0;
+    if (dateFrom != null) count++;
+    if (dateTo != null) count++;
+    if (sports.isNotEmpty) count++;
+    if (sessionTypes.isNotEmpty) count++;
+    if (sessionTasks.isNotEmpty) count++;
+    if (protocolNames.isNotEmpty) count++;
+    if (contextEnvironmentTags.isNotEmpty) count++;
+    if (intensitySourcesForSlope.isNotEmpty) count++;
+    if (intensityMetricNames.isNotEmpty) count++;
+    if (intensityValueMin != null || intensityValueMax != null) count++;
+    if (rpeMin != null || rpeMax != null) count++;
+    if (fatigueMin != null || fatigueMax != null) count++;
+    if (slopeMin != null || slopeMax != null) count++;
+    if (itlMin != null || itlMax != null) count++;
+    if (hrvInputModes.isNotEmpty) count++;
+    if (recoveryWindows.isNotEmpty) count++;
+    if ((notesTextSearch ?? '').trim().isNotEmpty) count++;
+    if (onlyCompleteSessions) count++;
+    if (comparableSessionsOnly) count++;
+    return count;
+  }
+
+  LongitudinalDashboardFilter clear() => const LongitudinalDashboardFilter();
+
+  LongitudinalDashboardFilter copyWith({
+    String? dateFrom,
+    bool clearDateFrom = false,
+    String? dateTo,
+    bool clearDateTo = false,
+    Set<String>? sports,
+    Set<String>? sessionTypes,
+    Set<String>? sessionTasks,
+    Set<String>? protocolNames,
+    Set<String>? contextEnvironmentTags,
+    Set<String>? intensitySourcesForSlope,
+    Set<String>? intensityMetricNames,
+    double? intensityValueMin,
+    bool clearIntensityValueMin = false,
+    double? intensityValueMax,
+    bool clearIntensityValueMax = false,
+    double? rpeMin,
+    bool clearRpeMin = false,
+    double? rpeMax,
+    bool clearRpeMax = false,
+    double? fatigueMin,
+    bool clearFatigueMin = false,
+    double? fatigueMax,
+    bool clearFatigueMax = false,
+    double? slopeMin,
+    bool clearSlopeMin = false,
+    double? slopeMax,
+    bool clearSlopeMax = false,
+    double? itlMin,
+    bool clearItlMin = false,
+    double? itlMax,
+    bool clearItlMax = false,
+    Set<String>? hrvInputModes,
+    Set<String>? recoveryWindows,
+    String? notesTextSearch,
+    bool clearNotesTextSearch = false,
+    bool? onlyCompleteSessions,
+    bool? comparableSessionsOnly,
+  }) {
+    return LongitudinalDashboardFilter(
+      dateFrom: clearDateFrom ? null : dateFrom ?? this.dateFrom,
+      dateTo: clearDateTo ? null : dateTo ?? this.dateTo,
+      sports: sports ?? this.sports,
+      sessionTypes: sessionTypes ?? this.sessionTypes,
+      sessionTasks: sessionTasks ?? this.sessionTasks,
+      protocolNames: protocolNames ?? this.protocolNames,
+      contextEnvironmentTags:
+          contextEnvironmentTags ?? this.contextEnvironmentTags,
+      intensitySourcesForSlope:
+          intensitySourcesForSlope ?? this.intensitySourcesForSlope,
+      intensityMetricNames: intensityMetricNames ?? this.intensityMetricNames,
+      intensityValueMin: clearIntensityValueMin
+          ? null
+          : intensityValueMin ?? this.intensityValueMin,
+      intensityValueMax: clearIntensityValueMax
+          ? null
+          : intensityValueMax ?? this.intensityValueMax,
+      rpeMin: clearRpeMin ? null : rpeMin ?? this.rpeMin,
+      rpeMax: clearRpeMax ? null : rpeMax ?? this.rpeMax,
+      fatigueMin: clearFatigueMin ? null : fatigueMin ?? this.fatigueMin,
+      fatigueMax: clearFatigueMax ? null : fatigueMax ?? this.fatigueMax,
+      slopeMin: clearSlopeMin ? null : slopeMin ?? this.slopeMin,
+      slopeMax: clearSlopeMax ? null : slopeMax ?? this.slopeMax,
+      itlMin: clearItlMin ? null : itlMin ?? this.itlMin,
+      itlMax: clearItlMax ? null : itlMax ?? this.itlMax,
+      hrvInputModes: hrvInputModes ?? this.hrvInputModes,
+      recoveryWindows: recoveryWindows ?? this.recoveryWindows,
+      notesTextSearch: clearNotesTextSearch
+          ? null
+          : notesTextSearch ?? this.notesTextSearch,
+      onlyCompleteSessions: onlyCompleteSessions ?? this.onlyCompleteSessions,
+      comparableSessionsOnly:
+          comparableSessionsOnly ?? this.comparableSessionsOnly,
+    );
+  }
+
+  bool matchesSession(LongitudinalPoint point) {
+    if (!_matchesDateRange(point.date)) return false;
+    if (!_matchesSet(sports, point.sport)) return false;
+    if (!_matchesSet(sessionTypes, point.sessionType)) return false;
+    if (!_matchesSet(sessionTasks, point.taskName)) return false;
+    if (!_matchesSet(protocolNames, point.protocolName)) return false;
+    if (!_matchesContextTags(
+      contextEnvironmentTags,
+      point.contextEnvironment,
+    )) {
+      return false;
+    }
+    if (!_matchesSet(intensitySourcesForSlope, point.intensitySourceForSlope)) {
+      return false;
+    }
+    if (!_matchesSet(intensityMetricNames, point.primaryIntensityMetric)) {
+      return false;
+    }
+    if (!LongitudinalRange(
+      min: intensityValueMin,
+      max: intensityValueMax,
+    ).contains(point.primaryIntensityValue)) {
+      return false;
+    }
+    if (!LongitudinalRange(min: rpeMin, max: rpeMax).contains(point.rpe)) {
+      return false;
+    }
+    if (!LongitudinalRange(
+      min: fatigueMin,
+      max: fatigueMax,
+    ).contains(point.fatigue)) {
+      return false;
+    }
+    if (!LongitudinalRange(
+      min: slopeMin,
+      max: slopeMax,
+    ).contains(point.interpretedSlope)) {
+      return false;
+    }
+    if (!LongitudinalRange(min: itlMin, max: itlMax).contains(point.itlIndex)) {
+      return false;
+    }
+    if (!_matchesSet(hrvInputModes, point.hrvInputMode)) return false;
+    if (!_matchesSet(recoveryWindows, point.recoveryWindowLabel)) return false;
+    final notesQuery = (notesTextSearch ?? '').trim().toLowerCase();
+    if (notesQuery.isNotEmpty &&
+        !((point.notes ?? '').toLowerCase().contains(notesQuery))) {
+      return false;
+    }
+    if (onlyCompleteSessions && !point.isComplete) return false;
+    return true;
+  }
+
+  List<String> activeFilterLabels() {
+    final labels = <String>[];
+    if (dateFrom != null) labels.add('From $dateFrom');
+    if (dateTo != null) labels.add('To $dateTo');
+    _addSetLabel(labels, 'Sport', sports);
+    _addSetLabel(labels, 'Type', sessionTypes);
+    _addSetLabel(labels, 'Task', sessionTasks);
+    _addSetLabel(labels, 'Protocol', protocolNames);
+    _addSetLabel(labels, 'Context', contextEnvironmentTags);
+    _addSetLabel(labels, 'Intensity source', intensitySourcesForSlope);
+    _addSetLabel(labels, 'Intensity metric', intensityMetricNames);
+    _addRangeLabel(labels, 'Intensity', intensityValueMin, intensityValueMax);
+    _addRangeLabel(labels, 'RPE', rpeMin, rpeMax);
+    _addRangeLabel(labels, 'Fatigue', fatigueMin, fatigueMax);
+    _addRangeLabel(labels, 'Slope', slopeMin, slopeMax);
+    _addRangeLabel(labels, 'ITL', itlMin, itlMax);
+    _addSetLabel(labels, 'HRV mode', hrvInputModes);
+    _addSetLabel(labels, 'Recovery window', recoveryWindows);
+    final query = (notesTextSearch ?? '').trim();
+    if (query.isNotEmpty) labels.add('Notes contains "$query"');
+    if (onlyCompleteSessions) labels.add('Complete sessions only');
+    if (comparableSessionsOnly) labels.add('Comparable sessions only');
+    return labels;
+  }
+
+  bool _matchesSet(Set<String> selected, String? value) {
+    if (selected.isEmpty) return true;
+    return value != null && selected.contains(value);
+  }
+
+  bool _matchesDateRange(String sessionDate) {
+    final sessionDay = _calendarDayKey(sessionDate);
+    final fromDay = _calendarDayKey(dateFrom);
+    final toDay = _calendarDayKey(dateTo);
+
+    if (sessionDay == null) return true;
+    if (fromDay != null && sessionDay.compareTo(fromDay) < 0) return false;
+    if (toDay != null && sessionDay.compareTo(toDay) > 0) return false;
+    return true;
+  }
+
+  bool _matchesContextTags(Set<String> selected, String? value) {
+    if (selected.isEmpty) return true;
+    final candidates = _contextEnvironmentOptions(
+      value,
+    ).map((text) => text.toLowerCase()).toSet();
+    return selected.any((text) => candidates.contains(text.toLowerCase()));
+  }
+
+  void _addSetLabel(List<String> labels, String label, Set<String> values) {
+    if (values.isEmpty) return;
+    labels.add('$label: ${values.join(', ')}');
+  }
+
+  void _addRangeLabel(
+    List<String> labels,
+    String label,
+    double? min,
+    double? max,
+  ) {
+    if (min == null && max == null) return;
+    final from = min?.toStringAsFixed(1) ?? '-';
+    final to = max?.toStringAsFixed(1) ?? '-';
+    labels.add('$label: $from to $to');
+  }
+}
+
+class LongitudinalFilterOptions {
+  final Set<String> sports;
+  final Set<String> sessionTypes;
+  final Set<String> sessionTasks;
+  final Set<String> protocolNames;
+  final Set<String> contextEnvironmentTags;
+  final Set<String> intensitySourcesForSlope;
+  final Set<String> intensityMetricNames;
+  final Set<String> hrvInputModes;
+  final Set<String> recoveryWindows;
+  final String? dateMin;
+  final String? dateMax;
+  final LongitudinalRange intensityRange;
+  final LongitudinalRange rpeRange;
+  final LongitudinalRange fatigueRange;
+  final LongitudinalRange slopeRange;
+  final LongitudinalRange itlRange;
+
+  const LongitudinalFilterOptions({
+    this.sports = const {},
+    this.sessionTypes = const {},
+    this.sessionTasks = const {},
+    this.protocolNames = const {},
+    this.contextEnvironmentTags = const {},
+    this.intensitySourcesForSlope = const {},
+    this.intensityMetricNames = const {},
+    this.hrvInputModes = const {},
+    this.recoveryWindows = const {},
+    this.dateMin,
+    this.dateMax,
+    this.intensityRange = const LongitudinalRange(),
+    this.rpeRange = const LongitudinalRange(),
+    this.fatigueRange = const LongitudinalRange(),
+    this.slopeRange = const LongitudinalRange(),
+    this.itlRange = const LongitudinalRange(),
+  });
+}
+
+class LongitudinalDataCompleteness {
+  final int includedSessions;
+  final int totalSessions;
+  final int withSlope;
+  final int withItl;
+  final int withExternalIntensity;
+  final int withInternalFallback;
+  final int withRpe;
+  final int withFatigue;
+  final int missingKeyData;
+
+  const LongitudinalDataCompleteness({
+    required this.includedSessions,
+    required this.totalSessions,
+    required this.withSlope,
+    required this.withItl,
+    required this.withExternalIntensity,
+    required this.withInternalFallback,
+    required this.withRpe,
+    required this.withFatigue,
+    required this.missingKeyData,
+  });
+}
+
 class LongitudinalPoint {
   final int sessionId;
   final String date;
   final String? taskName;
+  final String? sport;
   final String? sessionType;
+  final String? protocolName;
+  final String? contextEnvironment;
+  final Set<String> contextEnvironmentTags;
   final double? intensityPercent;
+  final double? primaryIntensityValue;
   final String intensitySourceForSlope;
   final String? primaryIntensityMetric;
   final double? interpretedSlope;
@@ -40,18 +404,27 @@ class LongitudinalPoint {
   final double? residualPercent;
   final String? classification;
   final double? rpe;
+  final double? fatigue;
   final double? srpe;
   final double? trimp;
   final String? primaryExternalLoadName;
   final double? primaryExternalLoadValue;
+  final String? hrvInputMode;
+  final String? recoveryWindowLabel;
+  final String? notes;
   final List<String> warnings;
 
   const LongitudinalPoint({
     required this.sessionId,
     required this.date,
     this.taskName,
+    this.sport,
     this.sessionType,
+    this.protocolName,
+    this.contextEnvironment,
+    this.contextEnvironmentTags = const {},
     this.intensityPercent,
+    this.primaryIntensityValue,
     this.intensitySourceForSlope = 'Unknown',
     this.primaryIntensityMetric,
     this.interpretedSlope,
@@ -61,10 +434,14 @@ class LongitudinalPoint {
     this.residualPercent,
     this.classification,
     this.rpe,
+    this.fatigue,
     this.srpe,
     this.trimp,
     this.primaryExternalLoadName,
     this.primaryExternalLoadValue,
+    this.hrvInputMode,
+    this.recoveryWindowLabel,
+    this.notes,
     this.warnings = const [],
   });
 
@@ -75,6 +452,8 @@ class LongitudinalSeries {
   final int athleteId;
   final String athleteName;
   final List<LongitudinalPoint> points;
+  final List<LongitudinalPoint> allPoints;
+  final List<LongitudinalPoint> excludedPoints;
   final List<double?> slopeRolling7;
   final List<double?> slopeRolling14;
   final List<double?> slopeRolling28;
@@ -83,11 +462,19 @@ class LongitudinalSeries {
   final List<double?> itlRolling28;
   final List<LongitudinalFatigueFlag> fatigueFlags;
   final LongitudinalSummary summary;
+  final LongitudinalDashboardFilter filter;
+  final LongitudinalFilterOptions filterOptions;
+  final LongitudinalDataCompleteness completeness;
+  final List<String> activeFilterLabels;
+  final int comparableIncludedCount;
+  final int comparableTotalCount;
 
   const LongitudinalSeries({
     required this.athleteId,
     required this.athleteName,
     required this.points,
+    this.allPoints = const [],
+    this.excludedPoints = const [],
     required this.slopeRolling7,
     required this.slopeRolling14,
     required this.slopeRolling28,
@@ -96,6 +483,22 @@ class LongitudinalSeries {
     required this.itlRolling28,
     required this.fatigueFlags,
     required this.summary,
+    this.filter = const LongitudinalDashboardFilter(),
+    this.filterOptions = const LongitudinalFilterOptions(),
+    this.completeness = const LongitudinalDataCompleteness(
+      includedSessions: 0,
+      totalSessions: 0,
+      withSlope: 0,
+      withItl: 0,
+      withExternalIntensity: 0,
+      withInternalFallback: 0,
+      withRpe: 0,
+      withFatigue: 0,
+      missingKeyData: 0,
+    ),
+    this.activeFilterLabels = const [],
+    this.comparableIncludedCount = 0,
+    this.comparableTotalCount = 0,
   });
 }
 
@@ -144,13 +547,33 @@ LongitudinalSeries buildLongitudinalSeries({
   required List<SessionDetail> details,
   PopulationNomogramSource nomogramPreset =
       PopulationNomogramSource.excelOperational,
+  LongitudinalDashboardFilter filter = const LongitudinalDashboardFilter(),
 }) {
   final sorted = List<SessionDetail>.from(details)
     ..sort((a, b) => a.session.date.compareTo(b.session.date));
 
-  final points = sorted
+  final allPoints = sorted
       .map((detail) => _pointFromDetail(detail, nomogramPreset))
       .toList();
+  final options = _filterOptions(allPoints);
+  final activeLabels = filter.activeFilterLabels();
+  final baseFilter = filter.copyWith(comparableSessionsOnly: false);
+  final baseIncluded = allPoints.where(baseFilter.matchesSession).toList();
+
+  var points = baseIncluded;
+  var comparableTotal = baseIncluded.length;
+  if (filter.comparableSessionsOnly && baseIncluded.isNotEmpty) {
+    final reference = baseIncluded.last;
+    points = baseIncluded
+        .where((point) => _isComparableTo(point, reference))
+        .toList();
+  }
+
+  final includedIds = points.map((point) => point.sessionId).toSet();
+  final excluded = allPoints
+      .where((point) => !includedIds.contains(point.sessionId))
+      .toList();
+
   final slopes = points.map((point) => point.interpretedSlope).toList();
   final itls = points.map((point) => point.itlIndex).toList();
 
@@ -165,6 +588,8 @@ LongitudinalSeries buildLongitudinalSeries({
     athleteId: athlete.id,
     athleteName: athlete.name,
     points: List.unmodifiable(points),
+    allPoints: List.unmodifiable(allPoints),
+    excludedPoints: List.unmodifiable(excluded),
     slopeRolling7: slopeRolling7,
     slopeRolling14: slopeRolling14,
     slopeRolling28: slopeRolling28,
@@ -179,6 +604,14 @@ LongitudinalSeries buildLongitudinalSeries({
       itlRolling28: itlRolling28,
     ),
     summary: _summary(points),
+    filter: filter,
+    filterOptions: options,
+    completeness: _completeness(points, allPoints.length),
+    activeFilterLabels: List.unmodifiable(activeLabels),
+    comparableIncludedCount: filter.comparableSessionsOnly
+        ? points.length
+        : baseIncluded.length,
+    comparableTotalCount: comparableTotal,
   );
 }
 
@@ -216,16 +649,22 @@ LongitudinalPoint _pointFromDetail(
   final primaryExternal =
       external.where((v) => v.isPrimaryForNomogram).firstOrNull ??
       (external.isEmpty ? null : external.first);
+  final sourceLabel = intensitySourceForSlopeLabel(session.intensitySource);
 
   return LongitudinalPoint(
     sessionId: session.id,
     date: session.date,
     taskName: session.taskName,
+    sport: session.sport,
     sessionType: session.sessionType,
-    intensityPercent: session.intensityPercent,
-    intensitySourceForSlope: intensitySourceForSlopeLabel(
-      session.intensitySource,
+    protocolName: session.protocolName,
+    contextEnvironment: session.contextEnvironment,
+    contextEnvironmentTags: _contextEnvironmentOptions(
+      session.contextEnvironment,
     ),
+    intensityPercent: session.intensityPercent,
+    primaryIntensityValue: session.intensityPercent,
+    intensitySourceForSlope: sourceLabel,
     primaryIntensityMetric: primaryIntensityMetricFromMethod(
       session.intensitySource,
     ),
@@ -239,12 +678,65 @@ LongitudinalPoint _pointFromDetail(
         : _classificationKey(classification.classification),
     rpe:
         _variableValue(internal, 'rpe_1_10') ??
+        _variableValue(internal, 'session_rpe_1_10') ??
         _variableValue(internal, 'rpe_borg'),
+    fatigue: _variableValue(internal, 'subjective_fatigue_1_10'),
     srpe: _variableValue(internal, 'srpe'),
     trimp: _variableValue(internal, 'trimp'),
     primaryExternalLoadName: primaryExternal?.name,
     primaryExternalLoadValue: primaryExternal?.value,
+    hrvInputMode: session.hrvInputMode,
+    recoveryWindowLabel: _recoveryWindowLabel(session),
+    notes: _notesText(detail),
     warnings: List.unmodifiable(warnings),
+  );
+}
+
+LongitudinalFilterOptions _filterOptions(List<LongitudinalPoint> points) {
+  return LongitudinalFilterOptions(
+    sports: _stringOptions(points.map((p) => p.sport)),
+    sessionTypes: _stringOptions(points.map((p) => p.sessionType)),
+    sessionTasks: _stringOptions(points.map((p) => p.taskName)),
+    protocolNames: _stringOptions(points.map((p) => p.protocolName)),
+    contextEnvironmentTags: _stringOptions(
+      points.expand((p) => p.contextEnvironmentTags),
+    ),
+    intensitySourcesForSlope: _stringOptions(
+      points.map((p) => p.intensitySourceForSlope),
+    ),
+    intensityMetricNames: _stringOptions(
+      points.map((p) => p.primaryIntensityMetric),
+    ),
+    hrvInputModes: _stringOptions(points.map((p) => p.hrvInputMode)),
+    recoveryWindows: _stringOptions(points.map((p) => p.recoveryWindowLabel)),
+    dateMin: _dateBound(points, first: true),
+    dateMax: _dateBound(points, first: false),
+    intensityRange: _range(points.map((p) => p.primaryIntensityValue)),
+    rpeRange: _range(points.map((p) => p.rpe)),
+    fatigueRange: _range(points.map((p) => p.fatigue)),
+    slopeRange: _range(points.map((p) => p.interpretedSlope)),
+    itlRange: _range(points.map((p) => p.itlIndex)),
+  );
+}
+
+LongitudinalDataCompleteness _completeness(
+  List<LongitudinalPoint> points,
+  int totalSessions,
+) {
+  return LongitudinalDataCompleteness(
+    includedSessions: points.length,
+    totalSessions: totalSessions,
+    withSlope: points.where((p) => p.interpretedSlope != null).length,
+    withItl: points.where((p) => p.itlIndex != null).length,
+    withExternalIntensity: points
+        .where((p) => p.intensitySourceForSlope == 'External')
+        .length,
+    withInternalFallback: points
+        .where((p) => p.intensitySourceForSlope == 'Internal')
+        .length,
+    withRpe: points.where((p) => p.rpe != null).length,
+    withFatigue: points.where((p) => p.fatigue != null).length,
+    missingKeyData: points.where((p) => !p.isComplete).length,
   );
 }
 
@@ -353,6 +845,47 @@ List<LongitudinalFatigueFlag> _fatigueFlags({
   return flags;
 }
 
+bool _isComparableTo(LongitudinalPoint point, LongitudinalPoint reference) {
+  if (!_sameWhenBothPresent(point.sport, reference.sport)) return false;
+  if (!_sameWhenBothPresent(point.taskName, reference.taskName)) return false;
+  if (!_sameWhenBothPresent(point.protocolName, reference.protocolName)) {
+    return false;
+  }
+  if (!_sameWhenBothPresent(
+    point.contextEnvironment,
+    reference.contextEnvironment,
+  )) {
+    return false;
+  }
+  if (!_sameWhenBothPresent(
+    point.intensitySourceForSlope,
+    reference.intensitySourceForSlope,
+  )) {
+    return false;
+  }
+  if (!_withinWhenBothPresent(
+    point.primaryIntensityValue,
+    reference.primaryIntensityValue,
+    10,
+  )) {
+    return false;
+  }
+  if (!_withinWhenBothPresent(point.rpe, reference.rpe, 2)) return false;
+  return true;
+}
+
+bool _sameWhenBothPresent(String? a, String? b) {
+  final left = (a ?? '').trim();
+  final right = (b ?? '').trim();
+  if (left.isEmpty || right.isEmpty) return true;
+  return left.toLowerCase() == right.toLowerCase();
+}
+
+bool _withinWhenBothPresent(double? a, double? b, double tolerance) {
+  if (a == null || b == null) return true;
+  return (a - b).abs() <= tolerance;
+}
+
 double? _variableValue(List<IntensityVariable> variables, String name) {
   for (final variable in variables) {
     if (variable.name == name) return variable.value;
@@ -360,8 +893,91 @@ double? _variableValue(List<IntensityVariable> variables, String name) {
   return null;
 }
 
+String? _recoveryWindowLabel(Session session) {
+  final start = session.recoveryWindowStartMin;
+  final end = session.recoveryWindowEndMin;
+  if (start == null || end == null) return null;
+  return '${_formatNumber(start)}-${_formatNumber(end)} min';
+}
+
+String? _notesText(SessionDetail detail) {
+  final values = <String>[
+    if ((detail.session.notes ?? '').trim().isNotEmpty) detail.session.notes!,
+    for (final note in detail.notes)
+      if (note.reason.trim().isNotEmpty) note.reason,
+  ];
+  if (values.isEmpty) return null;
+  return values.join(' | ');
+}
+
+Set<String> _stringOptions(Iterable<String?> values) {
+  final set = <String>{};
+  for (final value in values) {
+    final text = (value ?? '').trim();
+    if (text.isNotEmpty) set.add(text);
+  }
+  final sorted = set.toList()
+    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return {for (final value in sorted) value};
+}
+
+Set<String> _contextEnvironmentOptions(String? value) {
+  final text = (value ?? '').trim();
+  if (text.isEmpty) return const {};
+  final options = <String>{text};
+  final parts = text.split(RegExp(r'[,;|#]'));
+  for (final part in parts) {
+    final tag = part.trim();
+    if (tag.isNotEmpty) options.add(tag);
+  }
+  final sorted = options.toList()
+    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return {for (final value in sorted) value};
+}
+
+String? _calendarDayKey(String? value) {
+  final text = (value ?? '').trim();
+  if (text.isEmpty) return null;
+  final parsed = DateTime.tryParse(text);
+  if (parsed != null) return _calendarKey(parsed);
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(text);
+  if (match == null) return null;
+  return '${match.group(1)}-${match.group(2)}-${match.group(3)}';
+}
+
+String _calendarKey(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+String? _dateBound(List<LongitudinalPoint> points, {required bool first}) {
+  final dates =
+      points
+          .map((point) => _calendarDayKey(point.date))
+          .whereType<String>()
+          .toList()
+        ..sort();
+  if (dates.isEmpty) return null;
+  return first ? dates.first : dates.last;
+}
+
+LongitudinalRange _range(Iterable<double?> values) {
+  final valid = values.whereType<double>().toList();
+  if (valid.isEmpty) return const LongitudinalRange();
+  return LongitudinalRange(
+    min: valid.reduce((a, b) => a < b ? a : b),
+    max: valid.reduce((a, b) => a > b ? a : b),
+  );
+}
+
 double _mean(List<double> values) =>
     values.reduce((a, b) => a + b) / values.length;
+
+String _formatNumber(double value) {
+  if ((value - value.round()).abs() < 1e-9) return value.round().toString();
+  return value.toStringAsFixed(1);
+}
 
 String _classificationKey(InternalLoadClassification classification) {
   switch (classification) {

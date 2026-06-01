@@ -9,7 +9,7 @@ This tool supports training analysis. It is not a medical diagnostic tool.
 ## Current Status
 
 - Phase 5.1 release readiness pass complete.
-- Latest gate: 365/365 tests passing.
+- Latest gate: 399/399 tests passing.
 - Database schema version: 4.
 - Direct RMSSD input remains the recommended/default workflow.
 - RR interval input is available as an advanced workflow.
@@ -30,10 +30,11 @@ Implemented:
 - individual report
 - group report
 - population nomogram
-- athlete longitudinal dashboard
+- athlete longitudinal dashboard with comparable-session filters
 - individual and hybrid nomogram overlay
 - CSV export for individual reports, group reports, longitudinal dashboards,
   individual nomograms, and population nomogram curve points
+- longitudinal CSV export uses the currently filtered dashboard session set
 - Excel-openable CSV exports remain the supported export format; XLSX is still
   deferred.
 - in-app Instructions Book covering collection, entry, interpretation, and

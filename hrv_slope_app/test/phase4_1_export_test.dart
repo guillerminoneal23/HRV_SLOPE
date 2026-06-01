@@ -127,6 +127,136 @@ void main() {
       expect(export.content, contains('three_negative_residuals'));
       expect(export.content, contains('3 consecutive residuals below -0.5'));
     });
+
+    test(
+      'exports filtered rows, filter summary, and intensity source fields',
+      () {
+        const point = LongitudinalPoint(
+          sessionId: 1,
+          date: '2026-05-01',
+          taskName: 'Tempo',
+          sport: 'Running',
+          sessionType: 'training',
+          protocolName: '5-10',
+          contextEnvironment: 'Indoor',
+          intensityPercent: 80,
+          intensitySourceForSlope: 'External',
+          primaryIntensityMetric: 'direct_percent_mas',
+          primaryIntensityValue: 80,
+          rawSlope: 0.5,
+          interpretedSlope: 0.5,
+          itlIndex: 2,
+          rpe: 7,
+          fatigue: 4,
+          notes: 'Filtered note',
+        );
+        const series = LongitudinalSeries(
+          athleteId: 1,
+          athleteName: 'Runner',
+          points: [point],
+          allPoints: [
+            point,
+            LongitudinalPoint(
+              sessionId: 2,
+              date: '2026-05-02',
+              taskName: 'Bike',
+              sport: 'Cycling',
+              sessionType: 'training',
+              rawSlope: 0.4,
+              interpretedSlope: 0.4,
+            ),
+          ],
+          excludedPoints: [
+            LongitudinalPoint(
+              sessionId: 2,
+              date: '2026-05-02',
+              taskName: 'Bike',
+              sport: 'Cycling',
+              sessionType: 'training',
+              rawSlope: 0.4,
+              interpretedSlope: 0.4,
+            ),
+          ],
+          filter: LongitudinalDashboardFilter(sports: {'Running'}),
+          activeFilterLabels: ['Sport: Running'],
+          slopeRolling7: [0.5],
+          slopeRolling14: [0.5],
+          slopeRolling28: [0.5],
+          itlRolling7: [2],
+          itlRolling14: [2],
+          itlRolling28: [2],
+          fatigueFlags: [],
+          summary: LongitudinalSummary(
+            nSessions: 1,
+            nComplete: 1,
+            latestSlope: 0.5,
+            latestItl: 2,
+            meanSlope: 0.5,
+            minSlope: 0.5,
+            maxSlope: 0.5,
+            meanItl: 2,
+            trendDirection: LongitudinalTrendDirection.insufficientData,
+          ),
+        );
+
+        final export = exportLongitudinalCsv(series);
+
+        expect(export.content, contains('filter_summary'));
+        expect(export.content, contains('Sport: Running'));
+        expect(export.content, contains('intensity_source_for_slope'));
+        expect(export.content, contains('primary_intensity_value'));
+        expect(export.content, contains('primary_intensity_metric'));
+        expect(export.content, contains('External'));
+        expect(export.content, contains('direct_percent_mas'));
+        expect(export.content, contains('Filtered note'));
+        expect(export.content, isNot(contains('Cycling')));
+      },
+    );
+
+    test('exports filter summary metadata when filtered set is empty', () {
+      const series = LongitudinalSeries(
+        athleteId: 1,
+        athleteName: 'Runner',
+        points: [],
+        allPoints: [
+          LongitudinalPoint(
+            sessionId: 1,
+            date: '2026-05-01',
+            taskName: 'Tempo',
+            sport: 'Running',
+          ),
+        ],
+        excludedPoints: [
+          LongitudinalPoint(
+            sessionId: 1,
+            date: '2026-05-01',
+            taskName: 'Tempo',
+            sport: 'Running',
+          ),
+        ],
+        filter: LongitudinalDashboardFilter(sports: {'Swimming'}),
+        activeFilterLabels: ['Sport: Swimming'],
+        slopeRolling7: [],
+        slopeRolling14: [],
+        slopeRolling28: [],
+        itlRolling7: [],
+        itlRolling14: [],
+        itlRolling28: [],
+        fatigueFlags: [],
+        summary: LongitudinalSummary(
+          nSessions: 0,
+          nComplete: 0,
+          trendDirection: LongitudinalTrendDirection.insufficientData,
+        ),
+      );
+
+      final export = exportLongitudinalCsv(series);
+
+      expect(export.rowCount, 1);
+      expect(export.content, contains('filter_summary'));
+      expect(export.content, contains('Sport: Swimming'));
+      expect(export.content, contains('Runner'));
+    });
   });
 
   group('Individual nomogram export', () {
