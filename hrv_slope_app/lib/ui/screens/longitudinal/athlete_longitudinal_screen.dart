@@ -10,6 +10,7 @@ import 'package:hrv_slope_app/ui/screens/nomogram/individual_nomogram_screen.dar
 import 'package:hrv_slope_app/ui/screens/reports/individual_report_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/longitudinal_chart.dart';
+import 'package:hrv_slope_app/ui/widgets/rpe_slope_quadrant_chart.dart';
 
 enum _OverlayMetric { intensity, rpe, fatigue, srpe, trimp }
 
@@ -363,51 +364,12 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               _zoneLegend(),
               _referenceHelpText('$_itlReferenceHelp $_referenceZonesHelp'),
             ],
-            _overlaySelector(),
-            LongitudinalChart(
-              title: _overlayTitle(),
-              valueLabel: _overlayLabel(),
-              points: [
-                for (final point in series.points)
-                  _chartPoint(
-                    point,
-                    value: _overlayValue(point),
-                    color: AppColors.secondary,
-                    tooltip: _overlayTooltip(point),
-                  ),
-              ],
+            RpeSlopeQuadrantChart(
+              data: series.rpeSlopeQuadrantData,
               selectedSessionId: _selectedSessionId,
               onPointSelected: _selectSession,
-              xAxisLabel: _xAxisLabel,
-              yMin: _overlay == _OverlayMetric.intensity ? 0 : null,
-              yMax: _overlay == _OverlayMetric.intensity
-                  ? intensityOverlayMax
-                  : null,
-              yInterval: _overlay == _OverlayMetric.intensity
-                  ? resolvePrimaryIntensityOverlayInterval(intensityOverlayMax)
-                  : null,
-              emptyMessage: 'No values available for this selected overlay.',
             ),
-            LongitudinalChart(
-              title: 'Residual Trend',
-              valueLabel: 'Residual',
-              points: [
-                for (final point in series.points)
-                  _chartPoint(
-                    point,
-                    value: point.residual,
-                    color: point.residual != null && point.residual! < 0
-                        ? AppColors.warning
-                        : AppColors.success,
-                    tooltip: _residualTooltip(point),
-                  ),
-              ],
-              selectedSessionId: _selectedSessionId,
-              onPointSelected: _selectSession,
-              xAxisLabel: _xAxisLabel,
-              emptyMessage:
-                  'Residuals require intensity percent and interpreted slope.',
-            ),
+            _advancedCharts(series, intensityOverlayMax),
             if (_selectedPoint(series) != null) _selectedSession(series),
             _flags(series),
             _sessionList(series),
@@ -1018,9 +980,69 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     );
   }
 
+  Widget _advancedCharts(
+    LongitudinalSeries series,
+    double intensityOverlayMax,
+  ) {
+    return ExpansionTile(
+      title: const Text('Advanced charts'),
+      subtitle: const Text('Primary intensity overlay and residual trend'),
+      tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+      childrenPadding: EdgeInsets.zero,
+      children: [
+        _overlaySelector(),
+        LongitudinalChart(
+          title: _overlayTitle(),
+          valueLabel: _overlayLabel(),
+          points: [
+            for (final point in series.points)
+              _chartPoint(
+                point,
+                value: _overlayValue(point),
+                color: AppColors.secondary,
+                tooltip: _overlayTooltip(point),
+              ),
+          ],
+          selectedSessionId: _selectedSessionId,
+          onPointSelected: _selectSession,
+          xAxisLabel: _xAxisLabel,
+          yMin: _overlay == _OverlayMetric.intensity ? 0 : null,
+          yMax: _overlay == _OverlayMetric.intensity
+              ? intensityOverlayMax
+              : null,
+          yInterval: _overlay == _OverlayMetric.intensity
+              ? resolvePrimaryIntensityOverlayInterval(intensityOverlayMax)
+              : null,
+          emptyMessage: 'No values available for this selected overlay.',
+        ),
+        LongitudinalChart(
+          title: 'Residual Trend',
+          valueLabel: 'Residual',
+          points: [
+            for (final point in series.points)
+              _chartPoint(
+                point,
+                value: point.residual,
+                color: point.residual != null && point.residual! < 0
+                    ? AppColors.warning
+                    : AppColors.success,
+                tooltip: _residualTooltip(point),
+              ),
+          ],
+          selectedSessionId: _selectedSessionId,
+          onPointSelected: _selectSession,
+          xAxisLabel: _xAxisLabel,
+          emptyMessage:
+              'Residuals require intensity percent and interpreted slope.',
+        ),
+      ],
+    );
+  }
+
   Widget _selectedSession(LongitudinalSeries series) {
     final point = _selectedPoint(series);
     if (point == null) return const SizedBox.shrink();
+    final quadrantPoint = _rpeSlopeQuadrantPoint(series, point.sessionId);
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -1033,7 +1055,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            _sessionDetails(point),
+            _sessionDetails(point, quadrantPoint: quadrantPoint),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
@@ -1118,7 +1140,20 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     );
   }
 
-  Widget _sessionDetails(LongitudinalPoint point) {
+  RpeSlopeQuadrantPoint? _rpeSlopeQuadrantPoint(
+    LongitudinalSeries series,
+    int sessionId,
+  ) {
+    for (final point in series.rpeSlopeQuadrantData.points) {
+      if (point.sessionId == sessionId) return point;
+    }
+    return null;
+  }
+
+  Widget _sessionDetails(
+    LongitudinalPoint point, {
+    RpeSlopeQuadrantPoint? quadrantPoint,
+  }) {
     return Wrap(
       spacing: 12,
       runSpacing: 4,
@@ -1146,7 +1181,13 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         Text(
           'Reference ITL ${_fixed(point.nomogramReference.referenceItl, 3)}',
         ),
+        if (quadrantPoint?.slopeResponseIndex != null)
+          Text(
+            'Response index ${_fixed(quadrantPoint!.slopeResponseIndex, 3)}',
+          ),
         Text('Recovery zone ${point.nomogramReference.zone.label}'),
+        if (quadrantPoint != null)
+          Text('RPE slope quadrant ${quadrantPoint.quadrant.label}'),
         Text(
           point.nomogramReference.isAvailable
               ? 'Reference ${point.nomogramReference.source}'
@@ -1238,14 +1279,14 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     if (_colorByOrellanaZone) {
       return longitudinalRecoveryZoneColor(point.nomogramReference.zone);
     }
-    return _classificationColor(point.classification);
+    return AppColors.primary;
   }
 
   Color _itlPointColor(LongitudinalPoint point) {
     if (_colorByOrellanaZone) {
       return longitudinalRecoveryZoneColor(point.nomogramReference.zone);
     }
-    return AppColors.tertiary;
+    return AppColors.primary;
   }
 
   LongitudinalPoint? _selectedPoint(LongitudinalSeries series) {
@@ -1430,21 +1471,6 @@ String _classLabel(String? value) {
       return 'Low internal load / fast recovery';
     default:
       return value ?? '-';
-  }
-}
-
-Color _classificationColor(String? value) {
-  switch (value) {
-    case 'very_high_internal_load':
-      return AppColors.classVeryHigh;
-    case 'high_or_moderate_internal_load':
-      return AppColors.classHighMod;
-    case 'expected_response':
-      return AppColors.classExpected;
-    case 'low_internal_load_or_fast_recovery':
-      return AppColors.classLowFast;
-    default:
-      return AppColors.tertiary;
   }
 }
 

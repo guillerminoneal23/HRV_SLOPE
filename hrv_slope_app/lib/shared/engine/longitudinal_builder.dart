@@ -18,6 +18,7 @@ const double kNegativeResidualFlagThreshold = -0.5;
 const int kNegativeResidualConsecutiveSessions = 3;
 const double kSlopeShortVsLongDropPercentThreshold = 30.0;
 const double kItlShortVsLongIncreasePercentThreshold = 50.0;
+const double kRpeSlopeQuadrantHighRpeThreshold = 7.0;
 
 enum LongitudinalTrendDirection {
   improving,
@@ -29,6 +30,61 @@ enum LongitudinalTrendDirection {
 enum LongitudinalXAxisMode { sessionOrder, date }
 
 enum LongitudinalRecoveryZone { low, normal, favorable, unavailable }
+
+enum RpeSlopeQuadrant {
+  lowRpeLowSlopeResponse,
+  lowRpeFavorableSlopeResponse,
+  highRpeLowSlopeResponse,
+  highRpeFavorableSlopeResponse,
+  unavailable,
+}
+
+extension RpeSlopeQuadrantText on RpeSlopeQuadrant {
+  String get key {
+    switch (this) {
+      case RpeSlopeQuadrant.lowRpeLowSlopeResponse:
+        return 'low_rpe_low_slope_response';
+      case RpeSlopeQuadrant.lowRpeFavorableSlopeResponse:
+        return 'low_rpe_favorable_slope_response';
+      case RpeSlopeQuadrant.highRpeLowSlopeResponse:
+        return 'high_rpe_low_slope_response';
+      case RpeSlopeQuadrant.highRpeFavorableSlopeResponse:
+        return 'high_rpe_favorable_slope_response';
+      case RpeSlopeQuadrant.unavailable:
+        return 'unavailable';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case RpeSlopeQuadrant.lowRpeLowSlopeResponse:
+        return 'Low RPE + low slope response';
+      case RpeSlopeQuadrant.lowRpeFavorableSlopeResponse:
+        return 'Low RPE + adequate/favorable slope response';
+      case RpeSlopeQuadrant.highRpeLowSlopeResponse:
+        return 'High RPE + low slope response';
+      case RpeSlopeQuadrant.highRpeFavorableSlopeResponse:
+        return 'High RPE + adequate/favorable slope response';
+      case RpeSlopeQuadrant.unavailable:
+        return 'Unavailable';
+    }
+  }
+
+  String get interpretation {
+    switch (this) {
+      case RpeSlopeQuadrant.lowRpeLowSlopeResponse:
+        return 'Lower perceived effort but lower-than-expected recovery response. Review context.';
+      case RpeSlopeQuadrant.lowRpeFavorableSlopeResponse:
+        return 'Low perceived effort with adequate or favorable slope response.';
+      case RpeSlopeQuadrant.highRpeLowSlopeResponse:
+        return 'Demanding perceived effort with lower-than-expected recovery response.';
+      case RpeSlopeQuadrant.highRpeFavorableSlopeResponse:
+        return 'Demanding perceived effort with adequate or favorable recovery response.';
+      case RpeSlopeQuadrant.unavailable:
+        return 'Not enough data to classify.';
+    }
+  }
+}
 
 extension LongitudinalRecoveryZoneText on LongitudinalRecoveryZone {
   String get key {
@@ -108,6 +164,98 @@ class LongitudinalNomogramReferenceSeries {
   });
 
   int get availableCount => points.where((point) => point.isAvailable).length;
+}
+
+class RpeSlopeQuadrantPoint {
+  final int sessionId;
+  final String date;
+  final String? sessionTaskName;
+  final String? sessionType;
+  final String? sport;
+  final String? protocolName;
+  final String? contextEnvironment;
+  final double? rpe;
+  final double? observedSlope;
+  final double? observedItl;
+  final double? primaryIntensityValue;
+  final String? primaryIntensityMetric;
+  final String intensitySourceForSlope;
+  final double? referenceSlope;
+  final double? slopeResponseIndex;
+  final LongitudinalRecoveryZone recoveryZone;
+  final RpeSlopeQuadrant quadrant;
+  final String? unavailableReason;
+  final String? notesSummary;
+
+  const RpeSlopeQuadrantPoint({
+    required this.sessionId,
+    required this.date,
+    this.sessionTaskName,
+    this.sessionType,
+    this.sport,
+    this.protocolName,
+    this.contextEnvironment,
+    this.rpe,
+    this.observedSlope,
+    this.observedItl,
+    this.primaryIntensityValue,
+    this.primaryIntensityMetric,
+    this.intensitySourceForSlope = 'Unknown',
+    this.referenceSlope,
+    this.slopeResponseIndex,
+    required this.recoveryZone,
+    required this.quadrant,
+    this.unavailableReason,
+    this.notesSummary,
+  });
+
+  bool get isPlottable =>
+      rpe != null && observedSlope != null && slopeResponseIndex != null;
+}
+
+class RpeSlopeQuadrantSummary {
+  final int pointsShown;
+  final int missingRpe;
+  final int missingReference;
+  final int lowRpeFavorableSlopeResponse;
+  final int highRpeFavorableSlopeResponse;
+  final int highRpeLowSlopeResponse;
+  final int lowRpeLowSlopeResponse;
+
+  const RpeSlopeQuadrantSummary({
+    required this.pointsShown,
+    required this.missingRpe,
+    required this.missingReference,
+    required this.lowRpeFavorableSlopeResponse,
+    required this.highRpeFavorableSlopeResponse,
+    required this.highRpeLowSlopeResponse,
+    required this.lowRpeLowSlopeResponse,
+  });
+
+  int get omittedSessions => missingRpe + missingReference;
+}
+
+class RpeSlopeQuadrantData {
+  final double highRpeThreshold;
+  final List<RpeSlopeQuadrantPoint> points;
+  final RpeSlopeQuadrantSummary summary;
+
+  const RpeSlopeQuadrantData({
+    this.highRpeThreshold = kRpeSlopeQuadrantHighRpeThreshold,
+    this.points = const [],
+    this.summary = const RpeSlopeQuadrantSummary(
+      pointsShown: 0,
+      missingRpe: 0,
+      missingReference: 0,
+      lowRpeFavorableSlopeResponse: 0,
+      highRpeFavorableSlopeResponse: 0,
+      highRpeLowSlopeResponse: 0,
+      lowRpeLowSlopeResponse: 0,
+    ),
+  });
+
+  Iterable<RpeSlopeQuadrantPoint> get plottablePoints =>
+      points.where((point) => point.isPlottable);
 }
 
 class LongitudinalRange {
@@ -565,6 +713,7 @@ class LongitudinalSeries {
   final LongitudinalFilterOptions filterOptions;
   final LongitudinalDataCompleteness completeness;
   final LongitudinalNomogramReferenceSeries nomogramReferenceSeries;
+  final RpeSlopeQuadrantData rpeSlopeQuadrantData;
   final List<String> activeFilterLabels;
   final int comparableIncludedCount;
   final int comparableTotalCount;
@@ -602,6 +751,7 @@ class LongitudinalSeries {
       missingKeyData: 0,
     ),
     this.nomogramReferenceSeries = const LongitudinalNomogramReferenceSeries(),
+    this.rpeSlopeQuadrantData = const RpeSlopeQuadrantData(),
     this.activeFilterLabels = const [],
     this.comparableIncludedCount = 0,
     this.comparableTotalCount = 0,
@@ -716,6 +866,7 @@ LongitudinalSeries buildLongitudinalSeries({
     nomogramReferenceSeries: LongitudinalNomogramReferenceSeries(
       points: List.unmodifiable(points.map((p) => p.nomogramReference)),
     ),
+    rpeSlopeQuadrantData: buildRpeSlopeQuadrantData(points),
     activeFilterLabels: List.unmodifiable(activeLabels),
     comparableIncludedCount: filter.comparableSessionsOnly
         ? points.length
@@ -874,6 +1025,122 @@ LongitudinalNomogramReferencePoint buildSlopeOrellana19LongitudinalReference({
     zone: _recoveryZoneFromClassification(classification.classification),
     source: classification.presetName ?? kSlopeOrellana19PresetName,
   );
+}
+
+RpeSlopeQuadrantData buildRpeSlopeQuadrantData(
+  List<LongitudinalPoint> points, {
+  double highRpeThreshold = kRpeSlopeQuadrantHighRpeThreshold,
+}) {
+  final quadrantPoints = <RpeSlopeQuadrantPoint>[];
+  var missingRpe = 0;
+  var missingReference = 0;
+  var lowRpeFavorable = 0;
+  var highRpeFavorable = 0;
+  var highRpeLow = 0;
+  var lowRpeLow = 0;
+
+  for (final point in points) {
+    final reference = point.nomogramReference;
+    final rpe = _validRpe(point.rpe);
+    final observedSlope = point.interpretedSlope;
+    final referenceSlope = reference.referenceSlope;
+    final responseIndex = _slopeResponseIndex(
+      observedSlope: observedSlope,
+      referenceSlope: referenceSlope,
+    );
+
+    String? unavailableReason;
+    if (rpe == null) {
+      unavailableReason = 'missing RPE';
+      missingRpe++;
+    } else if (responseIndex == null) {
+      unavailableReason =
+          reference.unavailableReason ?? 'missing reference slope';
+      missingReference++;
+    }
+
+    final quadrant = unavailableReason == null
+        ? classifyRpeSlopeQuadrant(
+            rpe: rpe!,
+            slopeResponseIndex: responseIndex!,
+            highRpeThreshold: highRpeThreshold,
+          )
+        : RpeSlopeQuadrant.unavailable;
+
+    switch (quadrant) {
+      case RpeSlopeQuadrant.lowRpeFavorableSlopeResponse:
+        lowRpeFavorable++;
+        break;
+      case RpeSlopeQuadrant.highRpeFavorableSlopeResponse:
+        highRpeFavorable++;
+        break;
+      case RpeSlopeQuadrant.highRpeLowSlopeResponse:
+        highRpeLow++;
+        break;
+      case RpeSlopeQuadrant.lowRpeLowSlopeResponse:
+        lowRpeLow++;
+        break;
+      case RpeSlopeQuadrant.unavailable:
+        break;
+    }
+
+    quadrantPoints.add(
+      RpeSlopeQuadrantPoint(
+        sessionId: point.sessionId,
+        date: point.date,
+        sessionTaskName: point.taskName,
+        sessionType: point.sessionType,
+        sport: point.sport,
+        protocolName: point.protocolName,
+        contextEnvironment: point.contextEnvironment,
+        rpe: rpe,
+        observedSlope: observedSlope,
+        observedItl: point.itlIndex,
+        primaryIntensityValue: point.primaryIntensityValue,
+        primaryIntensityMetric: point.primaryIntensityMetric,
+        intensitySourceForSlope: point.intensitySourceForSlope,
+        referenceSlope: referenceSlope,
+        slopeResponseIndex: responseIndex,
+        recoveryZone: reference.zone,
+        quadrant: quadrant,
+        unavailableReason: unavailableReason,
+        notesSummary: _notesSummary(point.notes),
+      ),
+    );
+  }
+
+  return RpeSlopeQuadrantData(
+    highRpeThreshold: highRpeThreshold,
+    points: List.unmodifiable(quadrantPoints),
+    summary: RpeSlopeQuadrantSummary(
+      pointsShown: quadrantPoints.where((point) => point.isPlottable).length,
+      missingRpe: missingRpe,
+      missingReference: missingReference,
+      lowRpeFavorableSlopeResponse: lowRpeFavorable,
+      highRpeFavorableSlopeResponse: highRpeFavorable,
+      highRpeLowSlopeResponse: highRpeLow,
+      lowRpeLowSlopeResponse: lowRpeLow,
+    ),
+  );
+}
+
+RpeSlopeQuadrant classifyRpeSlopeQuadrant({
+  required double rpe,
+  required double slopeResponseIndex,
+  double highRpeThreshold = kRpeSlopeQuadrantHighRpeThreshold,
+}) {
+  final highRpe = rpe >= highRpeThreshold;
+  final lowSlopeResponse = slopeResponseIndex < 1.0;
+  if (highRpe && lowSlopeResponse) {
+    return RpeSlopeQuadrant.highRpeLowSlopeResponse;
+  }
+  if (highRpe) {
+    return RpeSlopeQuadrant.highRpeFavorableSlopeResponse;
+  }
+  if (lowSlopeResponse) {
+    return RpeSlopeQuadrant.lowRpeLowSlopeResponse;
+  }
+  return RpeSlopeQuadrant.lowRpeFavorableSlopeResponse;
 }
 
 LongitudinalFilterOptions _filterOptions(List<LongitudinalPoint> points) {
@@ -1224,4 +1491,27 @@ bool _isPositiveFinite(double? value) {
 double? _itlFromSlope(double? slope) {
   if (!_isPositiveFinite(slope)) return null;
   return 1 / slope!;
+}
+
+double? _validRpe(double? value) {
+  if (value == null || !value.isFinite) return null;
+  if (value < 1 || value > 10) return null;
+  return value;
+}
+
+double? _slopeResponseIndex({
+  required double? observedSlope,
+  required double? referenceSlope,
+}) {
+  if (!_isPositiveFinite(observedSlope) || !_isPositiveFinite(referenceSlope)) {
+    return null;
+  }
+  return observedSlope! / referenceSlope!;
+}
+
+String? _notesSummary(String? notes) {
+  final text = (notes ?? '').trim();
+  if (text.isEmpty) return null;
+  if (text.length <= 90) return text;
+  return '${text.substring(0, 90)}...';
 }

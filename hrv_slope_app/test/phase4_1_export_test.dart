@@ -226,8 +226,17 @@ void main() {
         expect(export.content, contains('nomogram_reference_source'));
         expect(export.content, contains('slope_orellana_19_reference_slope'));
         expect(export.content, contains('recovery_zone'));
+        expect(export.content, contains('rpe_slope_response_index'));
+        expect(export.content, contains('rpe_slope_quadrant'));
+        expect(export.content, contains('rpe_high_threshold'));
+        expect(export.content, contains('rpe_slope_quadrant_label'));
         expect(export.content, contains('slope_Orellana_19'));
         expect(export.content, contains('normal'));
+        expect(export.content, contains('high_rpe_favorable_slope_response'));
+        expect(
+          export.content,
+          contains('High RPE + adequate/favorable slope response'),
+        );
         expect(export.content, contains('External'));
         expect(export.content, contains('direct_percent_mas'));
         expect(export.content, contains('Filtered note'));
@@ -277,6 +286,7 @@ void main() {
       expect(export.rowCount, 1);
       expect(export.content, contains('filter_summary'));
       expect(export.content, contains('nomogram_reference_source'));
+      expect(export.content, contains('rpe_slope_response_index'));
       expect(export.content, contains('Sport: Swimming'));
       expect(export.content, contains('Runner'));
     });

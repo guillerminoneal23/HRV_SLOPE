@@ -305,6 +305,10 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
     'recovery_zone',
     'nomogram_reference_unavailable_reason',
     'rpe',
+    'rpe_slope_response_index',
+    'rpe_slope_quadrant',
+    'rpe_high_threshold',
+    'rpe_slope_quadrant_label',
     'fatigue',
     'srpe',
     'trimp',
@@ -322,6 +326,13 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
   final filterSummary = series.activeFilterLabels.isEmpty
       ? 'No filters'
       : series.activeFilterLabels.join('; ');
+  final quadrantData =
+      series.rpeSlopeQuadrantData.points.isEmpty && series.points.isNotEmpty
+      ? buildRpeSlopeQuadrantData(series.points)
+      : series.rpeSlopeQuadrantData;
+  final quadrantBySessionId = {
+    for (final point in quadrantData.points) point.sessionId: point,
+  };
   final rows = <List<Object?>>[
     if (series.points.isEmpty && series.activeFilterLabels.isNotEmpty)
       _emptyLongitudinalMetadataRow(series, filterSummary, headers.length),
@@ -357,6 +368,10 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
         series.points[i].nomogramReference.zone.key,
         series.points[i].nomogramReference.unavailableReason,
         series.points[i].rpe,
+        quadrantBySessionId[series.points[i].sessionId]?.slopeResponseIndex,
+        quadrantBySessionId[series.points[i].sessionId]?.quadrant.key,
+        quadrantData.highRpeThreshold,
+        quadrantBySessionId[series.points[i].sessionId]?.quadrant.label,
         series.points[i].fatigue,
         series.points[i].srpe,
         series.points[i].trimp,

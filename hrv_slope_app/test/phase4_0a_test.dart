@@ -16,6 +16,7 @@ import 'package:hrv_slope_app/ui/screens/athletes/athlete_detail_screen.dart';
 import 'package:hrv_slope_app/ui/screens/longitudinal/athlete_longitudinal_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/longitudinal_chart.dart';
+import 'package:hrv_slope_app/ui/widgets/rpe_slope_quadrant_chart.dart';
 
 void main() {
   group('Longitudinal builder', () {
@@ -536,6 +537,101 @@ void main() {
       expect(series.completeness.referenceZoneLow, 1);
       expect(series.completeness.referenceZoneFavorable, 1);
     });
+
+    test('builds RPE slope quadrant data with response indexes', () {
+      final bands = evaluatePopulationNomogramBands(
+        80,
+        source: PopulationNomogramSource.slopeOrellana19,
+      );
+      final series = _series([
+        _detail(id: 1, rpe: 6.9, intensity: 80, slope: bands.expectedMean),
+        _detail(id: 2, rpe: 7.0, intensity: 80, slope: bands.expectedMean),
+        _detail(id: 3, rpe: 8, intensity: 80, slope: bands.expectedMean / 2),
+        _detail(id: 4, rpe: 4, intensity: 80, slope: bands.expectedMean / 2),
+      ]);
+
+      final data = series.rpeSlopeQuadrantData;
+
+      expect(data.highRpeThreshold, 7.0);
+      expect(data.summary.pointsShown, 4);
+      expect(
+        data.points.first.slopeResponseIndex,
+        closeTo(
+          data.points.first.observedSlope! / data.points.first.referenceSlope!,
+          1e-9,
+        ),
+      );
+      expect(data.points.map((point) => point.quadrant), [
+        RpeSlopeQuadrant.lowRpeFavorableSlopeResponse,
+        RpeSlopeQuadrant.highRpeFavorableSlopeResponse,
+        RpeSlopeQuadrant.highRpeLowSlopeResponse,
+        RpeSlopeQuadrant.lowRpeLowSlopeResponse,
+      ]);
+      expect(data.summary.lowRpeFavorableSlopeResponse, 1);
+      expect(data.summary.highRpeFavorableSlopeResponse, 1);
+      expect(data.summary.highRpeLowSlopeResponse, 1);
+      expect(data.summary.lowRpeLowSlopeResponse, 1);
+    });
+
+    test('quadrant data marks unavailable and respects filters', () {
+      final series = _series([
+        _detail(id: 1, sport: 'Running', rpe: null, intensity: 80, slope: 0.5),
+        _detail(id: 2, sport: 'Running', rpe: 8, intensity: null, slope: 0.5),
+        _detail(id: 3, sport: 'Cycling', rpe: 6, intensity: 80, slope: 0.5),
+      ], filter: const LongitudinalDashboardFilter(sports: {'Running'}));
+
+      final data = series.rpeSlopeQuadrantData;
+
+      expect(series.points.map((point) => point.sport), ['Running', 'Running']);
+      expect(data.points, hasLength(2));
+      expect(data.summary.pointsShown, 0);
+      expect(data.summary.missingRpe, 1);
+      expect(data.summary.missingReference, 1);
+      expect(data.points.map((point) => point.quadrant), [
+        RpeSlopeQuadrant.unavailable,
+        RpeSlopeQuadrant.unavailable,
+      ]);
+      expect(data.points.first.unavailableReason, 'missing RPE');
+      expect(data.points.last.unavailableReason, 'missing primary intensity');
+    });
+
+    test('quadrant data respects comparable sessions only', () {
+      final series = _series(
+        [
+          _detail(
+            id: 1,
+            taskName: 'Tempo',
+            protocolName: '5-10',
+            contextEnvironment: 'Indoor',
+            intensity: 80,
+            slope: 0.5,
+          ),
+          _detail(
+            id: 2,
+            taskName: 'HIIT',
+            protocolName: '5-10',
+            contextEnvironment: 'Indoor',
+            intensity: 80,
+            slope: 0.5,
+          ),
+          _detail(
+            id: 3,
+            taskName: 'Tempo',
+            protocolName: '5-10',
+            contextEnvironment: 'Indoor',
+            intensity: 80,
+            slope: 0.5,
+          ),
+        ],
+        filter: const LongitudinalDashboardFilter(comparableSessionsOnly: true),
+      );
+
+      expect(series.points.map((point) => point.taskName).toSet(), {'Tempo'});
+      expect(
+        series.rpeSlopeQuadrantData.points.map((point) => point.sessionId),
+        series.points.map((point) => point.sessionId),
+      );
+    });
   });
 
   group('Longitudinal chart scaling', () {
@@ -848,6 +944,130 @@ void main() {
       expect(selectedSessionId, 2);
     });
 
+    testWidgets('RPE slope quadrant chart shows thresholds tooltip and select', (
+      tester,
+    ) async {
+      int? selectedSessionId;
+      const data = RpeSlopeQuadrantData(
+        highRpeThreshold: 7,
+        points: [
+          RpeSlopeQuadrantPoint(
+            sessionId: 11,
+            date: '2026-05-28',
+            sessionTaskName: 'RSA',
+            rpe: 6,
+            observedSlope: 0.8,
+            observedItl: 1.25,
+            primaryIntensityValue: 60,
+            primaryIntensityMetric: 'rpe_1_10',
+            intensitySourceForSlope: 'Internal',
+            referenceSlope: 2.2,
+            slopeResponseIndex: 0.36,
+            recoveryZone: LongitudinalRecoveryZone.low,
+            quadrant: RpeSlopeQuadrant.lowRpeLowSlopeResponse,
+            notesSummary: 'Notes should not appear in compact tooltip',
+          ),
+        ],
+        summary: RpeSlopeQuadrantSummary(
+          pointsShown: 1,
+          missingRpe: 0,
+          missingReference: 0,
+          lowRpeFavorableSlopeResponse: 0,
+          highRpeFavorableSlopeResponse: 0,
+          highRpeLowSlopeResponse: 0,
+          lowRpeLowSlopeResponse: 1,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: RpeSlopeQuadrantChart(
+                data: data,
+                onPointSelected: (sessionId) => selectedSessionId = sessionId,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('RPE vs Slope response'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Y-axis shows observed slope relative to the slope_Orellana_19 reference',
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('X-axis: RPE 1-10'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Y-axis: observed slope / slope_Orellana_19 reference',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Expected response line: 1.0'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('left = lower RPE, right = high RPE'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('above 1.0 = adequate/favorable slope response'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('below 1.0 = lower-than-expected slope response'),
+        findsOneWidget,
+      );
+      expect(find.text('High RPE threshold: 7.0'), findsOneWidget);
+      expect(find.text('RPE threshold'), findsOneWidget);
+      expect(find.text('Expected slope response = 1.0'), findsOneWidget);
+      expect(find.textContaining('Low:'), findsOneWidget);
+      expect(find.textContaining('Normal:'), findsOneWidget);
+      expect(find.textContaining('Favorable:'), findsOneWidget);
+      expect(find.textContaining('Unavailable:'), findsOneWidget);
+
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      expect(chart.data.extraLinesData.verticalLines.single.x, 7);
+      expect(chart.data.extraLinesData.horizontalLines.single.y, 1);
+
+      final bar = chart.data.lineBarsData.single;
+      final touchedSpot = TouchLineBarSpot(bar, 0, bar.spots.single, 0);
+      final tooltip = chart.data.lineTouchData.touchTooltipData.getTooltipItems(
+        [touchedSpot],
+      ).single!;
+
+      expect(tooltip.text, contains('2026-05-28'));
+      expect(tooltip.text, contains('RSA'));
+      expect(tooltip.text, contains('RPE: 6.0'));
+      expect(tooltip.text, contains('Slope: 0.800'));
+      expect(tooltip.text, contains('Response index: 0.36'));
+      expect(tooltip.text, contains('Zone: Low'));
+      expect(tooltip.text, contains('Intensity: 60.0%'));
+      expect(tooltip.text, isNot(contains('Notes should not appear')));
+      expect(tooltip.text, isNot(contains('threshold')));
+
+      chart.data.lineTouchData.touchCallback?.call(
+        FlTapUpEvent(
+          TapUpDetails(
+            kind: PointerDeviceKind.touch,
+            globalPosition: Offset.zero,
+            localPosition: Offset.zero,
+          ),
+        ),
+        LineTouchResponse(
+          touchLocation: Offset.zero,
+          touchChartCoordinate: Offset.zero,
+          lineBarSpots: [touchedSpot],
+        ),
+      );
+
+      expect(selectedSessionId, 11);
+    });
+
     testWidgets('empty state when no complete sessions', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -878,7 +1098,11 @@ void main() {
       await _dragUntilVisible(tester, find.text('Open report'));
 
       expect(find.text('Open report'), findsOneWidget);
-      await tester.tap(find.widgetWithText(ListTile, 'Session 1'));
+      final sessionTile = find.widgetWithText(ListTile, 'Session 1');
+      await _dragUntilVisible(tester, sessionTile);
+      await tester.ensureVisible(sessionTile);
+      await tester.pumpAndSettle();
+      await tester.tap(sessionTile);
       await tester.pumpAndSettle();
       await _dragBackUntilVisible(tester, find.text('Selected session'));
 
@@ -977,6 +1201,130 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('zone color toggle disables Slope and ITL zone colors', (
+      tester,
+    ) async {
+      final bands = evaluatePopulationNomogramBands(
+        80,
+        source: PopulationNomogramSource.slopeOrellana19,
+      );
+      await _seedSession(db, athleteId, slope: bands.expectedLower / 2);
+      await _seedSession(db, athleteId, slope: bands.expectedMean, day: 2);
+      await _seedSession(
+        db,
+        athleteId,
+        slope: bands.expectedUpper + 0.2,
+        day: 3,
+      );
+      await _seedSession(db, athleteId, slope: 0.7, intensity: null, day: 4);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _dragUntilVisible(
+        tester,
+        find.text('Color points by slope_Orellana_19 zone'),
+      );
+
+      await _dragUntilVisible(tester, find.text('Slope Trend'));
+      var charts = tester.widgetList<LongitudinalChart>(
+        find.byType(LongitudinalChart),
+      );
+      var slopeChart = charts.firstWhere(
+        (chart) => chart.title == 'Slope Trend',
+      );
+      expect(slopeChart.points.map((point) => point.color), [
+        AppColors.warning,
+        AppColors.primary,
+        AppColors.success,
+        AppColors.textHint,
+      ]);
+      await _dragUntilVisible(tester, find.text('ITL Trend'));
+      charts = tester.widgetList<LongitudinalChart>(
+        find.byType(LongitudinalChart),
+      );
+      var itlChart = charts.firstWhere((chart) => chart.title == 'ITL Trend');
+      expect(itlChart.points.map((point) => point.color), [
+        AppColors.warning,
+        AppColors.primary,
+        AppColors.success,
+        AppColors.textHint,
+      ]);
+
+      await _dragBackUntilVisible(
+        tester,
+        find.text('Color points by slope_Orellana_19 zone'),
+      );
+      await tester.tap(find.text('Color points by slope_Orellana_19 zone'));
+      await tester.pumpAndSettle();
+
+      await _dragUntilVisible(tester, find.text('Slope Trend'));
+      charts = tester.widgetList<LongitudinalChart>(
+        find.byType(LongitudinalChart),
+      );
+      slopeChart = charts.firstWhere((chart) => chart.title == 'Slope Trend');
+      expect(
+        slopeChart.points.map((point) => point.color),
+        List.filled(4, AppColors.primary),
+      );
+      await _dragUntilVisible(tester, find.text('ITL Trend'));
+      charts = tester.widgetList<LongitudinalChart>(
+        find.byType(LongitudinalChart),
+      );
+      itlChart = charts.firstWhere((chart) => chart.title == 'ITL Trend');
+      expect(
+        itlChart.points.map((point) => point.color),
+        List.filled(4, AppColors.primary),
+      );
+      expect(
+        find.textContaining(
+          "Points are colored by the session's slope_Orellana_19 zone.",
+        ),
+        findsNothing,
+      );
+
+      await _dragUntilVisible(tester, find.text('RPE vs Slope response'));
+      final quadrant = tester.widget<RpeSlopeQuadrantChart>(
+        find.byType(RpeSlopeQuadrantChart),
+      );
+      expect(
+        quadrant.data.points.first.recoveryZone,
+        LongitudinalRecoveryZone.low,
+      );
+    });
+
+    testWidgets('advanced charts are collapsed by default', (tester) async {
+      await _seedSession(db, athleteId, slope: 0.5);
+      await _seedSession(db, athleteId, slope: 1.0, day: 2);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _dragUntilVisible(tester, find.text('Slope Trend'));
+      expect(find.text('Slope Trend'), findsOneWidget);
+      await _dragUntilVisible(tester, find.text('ITL Trend'));
+      expect(find.text('ITL Trend'), findsOneWidget);
+      await _dragUntilVisible(tester, find.text('RPE vs Slope response'));
+      expect(find.text('RPE vs Slope response'), findsOneWidget);
+      await _dragUntilVisible(tester, find.text('Advanced charts'));
+      expect(find.text('Advanced charts'), findsOneWidget);
+      expect(find.text('Intensity Overlay'), findsNothing);
+      expect(find.text('Residual Trend'), findsNothing);
+
+      await tester.tap(find.text('Advanced charts'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Intensity Overlay'), findsOneWidget);
+      expect(find.text('Residual Trend'), findsOneWidget);
     });
 
     testWidgets('dashboard explains ITL reference and zones', (tester) async {
