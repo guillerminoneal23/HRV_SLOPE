@@ -295,6 +295,15 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
     'residual',
     'residual_percent',
     'classification',
+    'nomogram_reference_source',
+    'slope_orellana_19_reference_slope',
+    'slope_orellana_19_lower_slope_threshold',
+    'slope_orellana_19_upper_slope_threshold',
+    'slope_orellana_19_reference_itl',
+    'slope_orellana_19_lower_itl_threshold',
+    'slope_orellana_19_upper_itl_threshold',
+    'recovery_zone',
+    'nomogram_reference_unavailable_reason',
     'rpe',
     'fatigue',
     'srpe',
@@ -315,7 +324,7 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
       : series.activeFilterLabels.join('; ');
   final rows = <List<Object?>>[
     if (series.points.isEmpty && series.activeFilterLabels.isNotEmpty)
-      _emptyLongitudinalMetadataRow(series, filterSummary),
+      _emptyLongitudinalMetadataRow(series, filterSummary, headers.length),
     for (var i = 0; i < series.points.length; i++)
       [
         filterSummary,
@@ -338,6 +347,15 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
         series.points[i].residual,
         series.points[i].residualPercent,
         series.points[i].classification,
+        series.points[i].nomogramReference.source,
+        series.points[i].nomogramReference.referenceSlope,
+        series.points[i].nomogramReference.lowerSlopeThreshold,
+        series.points[i].nomogramReference.upperSlopeThreshold,
+        series.points[i].nomogramReference.referenceItl,
+        series.points[i].nomogramReference.lowerItlThreshold,
+        series.points[i].nomogramReference.upperItlThreshold,
+        series.points[i].nomogramReference.zone.key,
+        series.points[i].nomogramReference.unavailableReason,
         series.points[i].rpe,
         series.points[i].fatigue,
         series.points[i].srpe,
@@ -367,44 +385,13 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
 List<Object?> _emptyLongitudinalMetadataRow(
   LongitudinalSeries series,
   String filterSummary,
+  int columnCount,
 ) {
-  return [
-    filterSummary,
-    series.athleteId,
-    series.athleteName,
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-  ];
+  final row = List<Object?>.filled(columnCount, '');
+  row[0] = filterSummary;
+  row[1] = series.athleteId;
+  row[2] = series.athleteName;
+  return row;
 }
 
 CsvExportData exportLongitudinalFatigueFlagsCsv(LongitudinalSeries series) {

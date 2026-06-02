@@ -1,16 +1,20 @@
 // Phase 4.0A tests — Athlete Longitudinal Dashboard MVP.
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:drift/drift.dart' as drift;
 import 'package:drift/native.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/shared/engine/statistics.dart';
 import 'package:hrv_slope_app/ui/screens/athletes/athlete_detail_screen.dart';
 import 'package:hrv_slope_app/ui/screens/longitudinal/athlete_longitudinal_screen.dart';
+import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/longitudinal_chart.dart';
 
 void main() {
@@ -403,6 +407,135 @@ void main() {
         'Running',
       ]);
     });
+
+    test('builds slope_Orellana_19 reference for session with intensity', () {
+      final series = _series([_detail(id: 1, intensity: 80, slope: 0.5)]);
+      final reference = series.points.single.nomogramReference;
+
+      expect(reference.source, 'slope_Orellana_19');
+      expect(reference.referenceSlope, isNotNull);
+      expect(reference.lowerSlopeThreshold, isNotNull);
+      expect(reference.upperSlopeThreshold, isNotNull);
+      expect(
+        reference.referenceItl,
+        closeTo(1 / reference.referenceSlope!, 1e-9),
+      );
+      expect(reference.zone, isNot(LongitudinalRecoveryZone.unavailable));
+      expect(series.nomogramReferenceSeries.availableCount, 1);
+    });
+
+    test('missing primary intensity makes reference unavailable', () {
+      final series = _series([_detail(id: 1, intensity: null, slope: 0.5)]);
+      final reference = series.points.single.nomogramReference;
+
+      expect(reference.zone, LongitudinalRecoveryZone.unavailable);
+      expect(reference.unavailableReason, 'missing primary intensity');
+      expect(reference.referenceSlope, isNull);
+    });
+
+    test('missing slope makes reference unavailable without breaking', () {
+      final series = _series([_detail(id: 1, intensity: 80, slope: null)]);
+      final reference = series.points.single.nomogramReference;
+
+      expect(reference.zone, LongitudinalRecoveryZone.unavailable);
+      expect(reference.unavailableReason, 'missing slope');
+      expect(series.points.single.interpretedSlope, isNull);
+    });
+
+    test('references respect active filters', () {
+      final series = _series([
+        _detail(id: 1, sport: 'Running', intensity: 80, slope: 0.5),
+        _detail(id: 2, sport: 'Cycling', intensity: 80, slope: 0.5),
+      ], filter: const LongitudinalDashboardFilter(sports: {'Running'}));
+
+      expect(series.points, hasLength(1));
+      expect(series.nomogramReferenceSeries.points, hasLength(1));
+      expect(series.nomogramReferenceSeries.availableCount, 1);
+      expect(series.points.single.sport, 'Running');
+    });
+
+    test('reference ITL is derived safely from reference slope', () {
+      final reference = buildSlopeOrellana19LongitudinalReference(
+        sessionId: 1,
+        date: '2026-05-01',
+        primaryIntensityValue: 80,
+        primaryIntensityMetric: 'direct_percent_mas',
+        intensitySourceForSlope: 'External',
+        observedSlope: 0.5,
+        observedItl: 2,
+      );
+
+      expect(reference.referenceSlope, isNotNull);
+      expect(
+        reference.referenceItl,
+        closeTo(1 / reference.referenceSlope!, 1e-9),
+      );
+      expect(reference.lowerItlThreshold, isNotNull);
+      expect(reference.upperItlThreshold, isNotNull);
+
+      final unavailable = buildSlopeOrellana19LongitudinalReference(
+        sessionId: 2,
+        date: '2026-05-02',
+        primaryIntensityValue: 80,
+        primaryIntensityMetric: 'direct_percent_mas',
+        intensitySourceForSlope: 'External',
+        observedSlope: 0,
+        observedItl: null,
+      );
+      expect(unavailable.referenceItl, isNull);
+      expect(unavailable.zone, LongitudinalRecoveryZone.unavailable);
+    });
+
+    test('recovery zones follow slope_Orellana_19 bands', () {
+      final bands = evaluatePopulationNomogramBands(
+        80,
+        source: PopulationNomogramSource.slopeOrellana19,
+      );
+      final low = buildSlopeOrellana19LongitudinalReference(
+        sessionId: 1,
+        date: '2026-05-01',
+        primaryIntensityValue: 80,
+        primaryIntensityMetric: 'direct_percent_mas',
+        intensitySourceForSlope: 'External',
+        observedSlope: bands.expectedLower / 2,
+        observedItl: null,
+      );
+      final normal = buildSlopeOrellana19LongitudinalReference(
+        sessionId: 2,
+        date: '2026-05-02',
+        primaryIntensityValue: 80,
+        primaryIntensityMetric: 'direct_percent_mas',
+        intensitySourceForSlope: 'External',
+        observedSlope: bands.expectedMean,
+        observedItl: null,
+      );
+      final favorable = buildSlopeOrellana19LongitudinalReference(
+        sessionId: 3,
+        date: '2026-05-03',
+        primaryIntensityValue: 80,
+        primaryIntensityMetric: 'direct_percent_mas',
+        intensitySourceForSlope: 'External',
+        observedSlope: bands.expectedUpper + 0.2,
+        observedItl: null,
+      );
+
+      expect(low.zone, LongitudinalRecoveryZone.low);
+      expect(normal.zone, LongitudinalRecoveryZone.normal);
+      expect(favorable.zone, LongitudinalRecoveryZone.favorable);
+    });
+
+    test('data completeness counts reference availability and zones', () {
+      final series = _series([
+        _detail(id: 1, intensity: 80, slope: 0.1),
+        _detail(id: 2, intensity: null, slope: 0.5),
+        _detail(id: 3, intensity: 80, slope: 2.0),
+      ]);
+
+      expect(series.completeness.withSlopeOrellana19Reference, 2);
+      expect(series.completeness.missingReferencePrimaryIntensity, 1);
+      expect(series.completeness.referenceZoneLow, 1);
+      expect(series.completeness.referenceZoneFavorable, 1);
+    });
   });
 
   group('Longitudinal chart scaling', () {
@@ -584,6 +717,137 @@ void main() {
       expect(find.textContaining('Line: session trend'), findsOneWidget);
     });
 
+    testWidgets('chart segments reference null gaps and renders legend', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LongitudinalChart(
+            title: 'Slope Trend',
+            valueLabel: 'Slope',
+            points: const [
+              LongitudinalChartPoint(label: '1', value: 0.5),
+              LongitudinalChartPoint(label: '2', value: null),
+              LongitudinalChartPoint(label: '3', value: 0.6),
+              LongitudinalChartPoint(label: '4', value: 0.7),
+            ],
+            referenceSeries: const [
+              LongitudinalChartReferenceSeries(
+                label: 'slope_Orellana_19 reference',
+                color: Colors.teal,
+                points: [
+                  LongitudinalChartPoint(label: '1', value: 0.4),
+                  LongitudinalChartPoint(label: '2', value: null),
+                  LongitudinalChartPoint(label: '3', value: 0.45),
+                  LongitudinalChartPoint(label: '4', value: 0.5),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      expect(find.text('Observed Slope'), findsOneWidget);
+      expect(find.text('slope_Orellana_19 reference'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      final referenceBars = chart.data.lineBarsData
+          .where((bar) => bar.color == Colors.teal)
+          .toList();
+
+      expect(referenceBars, hasLength(2));
+      expect(referenceBars.first.spots.map((spot) => spot.x), [0]);
+      expect(referenceBars.last.spots.map((spot) => spot.x), [2, 3]);
+    });
+
+    testWidgets('chart tooltip and tap use session index with null observed', (
+      tester,
+    ) async {
+      int? selectedSessionId;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LongitudinalChart(
+            title: 'Slope Trend',
+            valueLabel: 'Slope',
+            onPointSelected: (sessionId) => selectedSessionId = sessionId,
+            points: const [
+              LongitudinalChartPoint(
+                sessionId: 1,
+                label: '1',
+                value: 0.5,
+                tooltip: 'Session 1 observed',
+              ),
+              LongitudinalChartPoint(
+                sessionId: 2,
+                label: '2',
+                value: null,
+                tooltip: 'Session 2 observed unavailable',
+              ),
+              LongitudinalChartPoint(
+                sessionId: 3,
+                label: '3',
+                value: 0.7,
+                tooltip: 'Session 3 observed',
+              ),
+            ],
+            referenceSeries: const [
+              LongitudinalChartReferenceSeries(
+                label: 'slope_Orellana_19 reference',
+                color: Colors.teal,
+                points: [
+                  LongitudinalChartPoint(label: '1', value: null),
+                  LongitudinalChartPoint(label: '2', value: 0.45),
+                  LongitudinalChartPoint(label: '3', value: 0.5),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      final referenceBarIndex = chart.data.lineBarsData.indexWhere(
+        (bar) => bar.color == Colors.teal,
+      );
+      final referenceBar = chart.data.lineBarsData[referenceBarIndex];
+      final referenceSpot = referenceBar.spots.firstWhere(
+        (spot) => spot.x == 1,
+      );
+      final touchedSpot = TouchLineBarSpot(
+        referenceBar,
+        referenceBarIndex,
+        referenceSpot,
+        0,
+      );
+
+      final tooltipItems = chart.data.lineTouchData.touchTooltipData
+          .getTooltipItems([touchedSpot]);
+      expect(
+        tooltipItems.single!.text,
+        contains('Session 2 observed unavailable'),
+      );
+
+      chart.data.lineTouchData.touchCallback?.call(
+        FlTapUpEvent(
+          TapUpDetails(
+            kind: PointerDeviceKind.touch,
+            globalPosition: Offset.zero,
+            localPosition: Offset.zero,
+          ),
+        ),
+        LineTouchResponse(
+          touchLocation: Offset.zero,
+          touchChartCoordinate: Offset.zero,
+          lineBarSpots: [touchedSpot],
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(selectedSessionId, 2);
+    });
+
     testWidgets('empty state when no complete sessions', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -614,6 +878,170 @@ void main() {
       await _dragUntilVisible(tester, find.text('Open report'));
 
       expect(find.text('Open report'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'Session 1'));
+      await tester.pumpAndSettle();
+      await _dragBackUntilVisible(tester, find.text('Selected session'));
+
+      expect(find.text('Selected session'), findsOneWidget);
+      expect(find.textContaining('Reference slope'), findsWidgets);
+      expect(find.textContaining('Low threshold'), findsWidgets);
+      expect(find.textContaining('Favorable threshold'), findsWidgets);
+    });
+
+    testWidgets('dashboard colors points by zone without reference lines', (
+      tester,
+    ) async {
+      final bands = evaluatePopulationNomogramBands(
+        80,
+        source: PopulationNomogramSource.slopeOrellana19,
+      );
+      await _seedSession(
+        db,
+        athleteId,
+        slope: bands.expectedLower / 2,
+        notes: 'Full notes should stay out of compact chart tooltips',
+      );
+      await _seedSession(db, athleteId, slope: bands.expectedMean, day: 2);
+      await _seedSession(
+        db,
+        athleteId,
+        slope: bands.expectedUpper + 0.2,
+        day: 3,
+      );
+      await _seedSession(db, athleteId, slope: 0.7, intensity: null, day: 4);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _dragUntilVisible(
+        tester,
+        find.text('Color points by slope_Orellana_19 zone'),
+      );
+      expect(
+        find.text('Color points by slope_Orellana_19 zone'),
+        findsOneWidget,
+      );
+      expect(find.text('Show slope_Orellana_19 reference'), findsNothing);
+
+      await _dragUntilVisible(tester, find.text('Slope Trend'));
+
+      final slopeChart = tester
+          .widgetList<LongitudinalChart>(find.byType(LongitudinalChart))
+          .firstWhere((chart) => chart.title == 'Slope Trend');
+      expect(slopeChart.referenceSeries, isEmpty);
+      expect(slopeChart.points.map((point) => point.color), [
+        AppColors.warning,
+        AppColors.primary,
+        AppColors.success,
+        AppColors.textHint,
+      ]);
+      expect(slopeChart.points.first.tooltip, contains('2026-05-01'));
+      expect(slopeChart.points.first.tooltip, contains('Session 1'));
+      expect(slopeChart.points.first.tooltip, contains('Slope:'));
+      expect(slopeChart.points.first.tooltip, contains('Zone: Low'));
+      expect(slopeChart.points.first.tooltip, contains('Intensity:'));
+      expect(
+        slopeChart.points.first.tooltip,
+        isNot(contains('Full notes should stay out')),
+      );
+      expect(
+        slopeChart.points.first.tooltip,
+        isNot(contains('Reference slope')),
+      );
+      expect(slopeChart.points.first.tooltip, isNot(contains('threshold')));
+
+      final lineChart = tester.widget<LineChart>(find.byType(LineChart).first);
+      expect(lineChart.data.lineBarsData, hasLength(1));
+      expect(lineChart.data.lineBarsData.single.color, AppColors.primary);
+      expect(lineChart.data.maxY, lessThan(2));
+      expect(find.text('Low: below expected response'), findsOneWidget);
+      expect(find.text('Normal: expected response'), findsOneWidget);
+      expect(find.text('Favorable: above favorable response'), findsOneWidget);
+      expect(
+        find.text('Unavailable: reference cannot be calculated'),
+        findsOneWidget,
+      );
+      await _dragUntilVisible(
+        tester,
+        find.textContaining(
+          "Points are colored by the session's slope_Orellana_19 zone.",
+        ),
+      );
+      expect(
+        find.textContaining(
+          "Points are colored by the session's slope_Orellana_19 zone.",
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('dashboard explains ITL reference and zones', (tester) async {
+      await _seedSession(db, athleteId, slope: 0.5);
+      await _seedSession(db, athleteId, slope: 1.0, day: 2);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _dragUntilVisible(
+        tester,
+        find.textContaining('Reference ITL is derived as 1 / reference slope'),
+      );
+
+      final itlChart = tester
+          .widgetList<LongitudinalChart>(find.byType(LongitudinalChart))
+          .firstWhere((chart) => chart.title == 'ITL Trend');
+      expect(itlChart.referenceSeries, isEmpty);
+      expect(itlChart.points.first.tooltip, contains('ITL:'));
+      expect(itlChart.points.first.tooltip, contains('Zone:'));
+      expect(itlChart.points.first.tooltip, contains('Intensity:'));
+      expect(itlChart.points.first.tooltip, contains('Slope:'));
+      expect(itlChart.points.first.tooltip, isNot(contains('Reference ITL')));
+      expect(
+        find.textContaining('Reference ITL is derived as 1 / reference slope'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Low, Normal, Favorable, or Unavailable'),
+        findsWidgets,
+      );
+    });
+
+    testWidgets('dashboard works when no session has reference available', (
+      tester,
+    ) async {
+      await _seedSession(db, athleteId, slope: 0.5, intensity: null);
+      await _seedSession(db, athleteId, slope: 1.0, intensity: null, day: 2);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      await _dragUntilVisible(
+        tester,
+        find.text('Color points by slope_Orellana_19 zone'),
+      );
+      expect(
+        find.text('Color points by slope_Orellana_19 zone'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'slope_Orellana_19 reference requires primary intensity and slope data.',
+        ),
+        findsOneWidget,
+      );
     });
 
     test('no medical diagnostic language', () {
@@ -847,7 +1275,9 @@ Future<int> _seedSession(
   AppDatabase db,
   int athleteId, {
   double slope = 0.5,
+  double? intensity = 80,
   int day = 1,
+  String? notes,
 }) async {
   final now = DateTime.now().toIso8601String();
   final date = '2026-05-${day.toString().padLeft(2, '0')}';
@@ -858,8 +1288,10 @@ Future<int> _seedSession(
       taskName: drift.Value('Session $day'),
       sport: const drift.Value('Running'),
       sessionType: const drift.Value('training'),
-      intensityPercent: const drift.Value(80),
-      intensitySource: const drift.Value('direct_percent_mas'),
+      intensityPercent: drift.Value(intensity),
+      intensitySource: drift.Value(
+        intensity == null ? null : 'direct_percent_mas',
+      ),
       recoveryTimeMin: const drift.Value(10),
       recoveryWindowStartMin: const drift.Value(5),
       recoveryWindowEndMin: const drift.Value(10),
@@ -871,6 +1303,7 @@ Future<int> _seedSession(
       hrvInputMode: const drift.Value('direct_rmssd'),
       rmssdRecoverySource: const drift.Value('manual'),
       rmssdExerciseSource: const drift.Value('measured'),
+      notes: drift.Value(notes),
       createdAt: now,
     ),
   );
@@ -899,6 +1332,14 @@ Future<void> _dragUntilVisible(WidgetTester tester, Finder finder) async {
   for (var i = 0; i < 8; i++) {
     if (finder.evaluate().isNotEmpty) return;
     await tester.drag(find.byType(ListView), const Offset(0, -360));
+    await tester.pumpAndSettle();
+  }
+}
+
+Future<void> _dragBackUntilVisible(WidgetTester tester, Finder finder) async {
+  for (var i = 0; i < 8; i++) {
+    if (finder.evaluate().isNotEmpty) return;
+    await tester.drag(find.byType(ListView), const Offset(0, 360));
     await tester.pumpAndSettle();
   }
 }

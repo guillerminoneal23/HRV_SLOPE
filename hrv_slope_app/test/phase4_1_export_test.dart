@@ -149,6 +149,23 @@ void main() {
           rpe: 7,
           fatigue: 4,
           notes: 'Filtered note',
+          nomogramReference: LongitudinalNomogramReferencePoint(
+            sessionId: 1,
+            date: '2026-05-01',
+            primaryIntensityValue: 80,
+            primaryIntensityMetric: 'direct_percent_mas',
+            intensitySourceForSlope: 'External',
+            observedSlope: 0.5,
+            observedItl: 2,
+            referenceSlope: 0.4,
+            lowerSlopeThreshold: 0.2,
+            upperSlopeThreshold: 0.8,
+            referenceItl: 2.5,
+            lowerItlThreshold: 1.25,
+            upperItlThreshold: 5,
+            zone: LongitudinalRecoveryZone.normal,
+            source: 'slope_Orellana_19',
+          ),
         );
         const series = LongitudinalSeries(
           athleteId: 1,
@@ -206,6 +223,11 @@ void main() {
         expect(export.content, contains('intensity_source_for_slope'));
         expect(export.content, contains('primary_intensity_value'));
         expect(export.content, contains('primary_intensity_metric'));
+        expect(export.content, contains('nomogram_reference_source'));
+        expect(export.content, contains('slope_orellana_19_reference_slope'));
+        expect(export.content, contains('recovery_zone'));
+        expect(export.content, contains('slope_Orellana_19'));
+        expect(export.content, contains('normal'));
         expect(export.content, contains('External'));
         expect(export.content, contains('direct_percent_mas'));
         expect(export.content, contains('Filtered note'));
@@ -254,6 +276,7 @@ void main() {
 
       expect(export.rowCount, 1);
       expect(export.content, contains('filter_summary'));
+      expect(export.content, contains('nomogram_reference_source'));
       expect(export.content, contains('Sport: Swimming'));
       expect(export.content, contains('Runner'));
     });
@@ -560,6 +583,23 @@ LongitudinalSeries _longitudinalSeries() {
       residual: -0.6,
       residualPercent: -54,
       classification: 'high_or_moderate_internal_load',
+      nomogramReference: LongitudinalNomogramReferencePoint(
+        sessionId: 1,
+        date: '2026-05-01',
+        primaryIntensityValue: 80,
+        primaryIntensityMetric: 'direct_percent_mas',
+        intensitySourceForSlope: 'External',
+        observedSlope: 0.5,
+        observedItl: 2,
+        referenceSlope: 0.4,
+        lowerSlopeThreshold: 0.2,
+        upperSlopeThreshold: 0.8,
+        referenceItl: 2.5,
+        lowerItlThreshold: 1.25,
+        upperItlThreshold: 5,
+        zone: LongitudinalRecoveryZone.normal,
+        source: 'slope_Orellana_19',
+      ),
       rpe: 7,
       srpe: 420,
       trimp: 80,

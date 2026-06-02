@@ -81,6 +81,13 @@ class AthleteLongitudinalScreen extends StatefulWidget {
 }
 
 class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
+  static const _slopeReferenceHelp =
+      "Points are colored by the session's slope_Orellana_19 zone. The reference is calculated per session from primary intensity.";
+  static const _itlReferenceHelp =
+      'Reference ITL is derived as 1 / reference slope. Lower ITL generally reflects a more favorable response.';
+  static const _referenceZonesHelp =
+      "Zones compare observed slope with the slope_Orellana_19 reference for that session's intensity: Low, Normal, Favorable, or Unavailable.";
+
   LongitudinalSeries? _series;
   Athlete? _athlete;
   List<SessionDetail> _details = [];
@@ -88,6 +95,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   _OverlayMetric _overlay = _OverlayMetric.intensity;
   LongitudinalDashboardFilter _filter = const LongitudinalDashboardFilter();
   LongitudinalXAxisMode _xAxisMode = LongitudinalXAxisMode.sessionOrder;
+  bool _colorByOrellanaZone = true;
   int? _selectedSessionId;
   final _dateFromController = TextEditingController();
   final _dateToController = TextEditingController();
@@ -313,6 +321,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
             _emptyFilteredState(series)
           else ...[
             _xAxisSelector(),
+            _referenceToggle(series),
             LongitudinalChart(
               title: 'Slope Trend',
               valueLabel: 'Slope',
@@ -321,13 +330,18 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
                   _chartPoint(
                     point,
                     value: point.interpretedSlope,
-                    color: _classificationColor(point.classification),
+                    color: _slopePointColor(point),
+                    tooltip: _slopeTooltip(point),
                   ),
               ],
               selectedSessionId: _selectedSessionId,
               onPointSelected: _selectSession,
               xAxisLabel: _xAxisLabel,
             ),
+            if (_colorByOrellanaZone) ...[
+              _zoneLegend(),
+              _referenceHelpText('$_slopeReferenceHelp $_referenceZonesHelp'),
+            ],
             LongitudinalChart(
               title: 'ITL Trend',
               valueLabel: 'ITL',
@@ -336,7 +350,8 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
                   _chartPoint(
                     point,
                     value: point.itlIndex,
-                    color: AppColors.tertiary,
+                    color: _itlPointColor(point),
+                    tooltip: _itlTooltip(point),
                   ),
               ],
               selectedSessionId: _selectedSessionId,
@@ -344,6 +359,10 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               xAxisLabel: _xAxisLabel,
               emptyMessage: 'No ITL values available for this athlete yet.',
             ),
+            if (_colorByOrellanaZone) ...[
+              _zoneLegend(),
+              _referenceHelpText('$_itlReferenceHelp $_referenceZonesHelp'),
+            ],
             _overlaySelector(),
             LongitudinalChart(
               title: _overlayTitle(),
@@ -354,6 +373,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
                     point,
                     value: _overlayValue(point),
                     color: AppColors.secondary,
+                    tooltip: _overlayTooltip(point),
                   ),
               ],
               selectedSessionId: _selectedSessionId,
@@ -379,6 +399,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
                     color: point.residual != null && point.residual! < 0
                         ? AppColors.warning
                         : AppColors.success,
+                    tooltip: _residualTooltip(point),
                   ),
               ],
               selectedSessionId: _selectedSessionId,
@@ -832,6 +853,17 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
             _metric('Internal fallback', '${c.withInternalFallback}'),
             _metric('With RPE', '${c.withRpe}'),
             _metric('With fatigue', '${c.withFatigue}'),
+            _metric(
+              'slope_Orellana_19 reference',
+              '${c.withSlopeOrellana19Reference}',
+            ),
+            _metric(
+              'Missing reference intensity',
+              '${c.missingReferencePrimaryIntensity}',
+            ),
+            _metric('Zone Low', '${c.referenceZoneLow}'),
+            _metric('Zone Normal', '${c.referenceZoneNormal}'),
+            _metric('Zone Favorable', '${c.referenceZoneFavorable}'),
             _metric('Missing key data', '${c.missingKeyData}'),
           ],
         ),
@@ -888,6 +920,71 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
             if (value != null) setState(() => _xAxisMode = value);
           },
         ),
+      ),
+    );
+  }
+
+  Widget _referenceToggle(LongitudinalSeries series) {
+    final available = series.nomogramReferenceSeries.availableCount;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: SwitchListTile(
+        value: _colorByOrellanaZone,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Row(
+          children: const [
+            Expanded(child: Text('Color points by slope_Orellana_19 zone')),
+            Tooltip(
+              message:
+                  "Points are colored by the session's slope_Orellana_19 zone. The reference is calculated per session from primary intensity.",
+              child: Icon(Icons.help_outline, size: 18),
+            ),
+          ],
+        ),
+        subtitle: Text(
+          available == 0
+              ? 'slope_Orellana_19 reference requires primary intensity and slope data.'
+              : '$available sessions have slope_Orellana_19 zone data.',
+        ),
+        onChanged: (value) => setState(() => _colorByOrellanaZone = value),
+      ),
+    );
+  }
+
+  Widget _zoneLegend() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 6,
+        children: const [
+          _ZoneLegendItem(
+            color: AppColors.warning,
+            label: 'Low: below expected response',
+          ),
+          _ZoneLegendItem(
+            color: AppColors.primary,
+            label: 'Normal: expected response',
+          ),
+          _ZoneLegendItem(
+            color: AppColors.success,
+            label: 'Favorable: above favorable response',
+          ),
+          _ZoneLegendItem(
+            color: AppColors.textHint,
+            label: 'Unavailable: reference cannot be calculated',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _referenceHelpText(String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
       ),
     );
   }
@@ -1034,6 +1131,27 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
           Text('Context ${point.contextEnvironment}'),
         Text('Slope ${_fixed(point.interpretedSlope, 3)}'),
         Text('ITL ${_fixed(point.itlIndex, 3)}'),
+        Text(
+          'Observed slope ${_fixed(point.nomogramReference.observedSlope, 3)}',
+        ),
+        Text(
+          'Reference slope ${_fixed(point.nomogramReference.referenceSlope, 3)}',
+        ),
+        Text(
+          'Low threshold ${_fixed(point.nomogramReference.lowerSlopeThreshold, 3)}',
+        ),
+        Text(
+          'Favorable threshold ${_fixed(point.nomogramReference.upperSlopeThreshold, 3)}',
+        ),
+        Text(
+          'Reference ITL ${_fixed(point.nomogramReference.referenceItl, 3)}',
+        ),
+        Text('Recovery zone ${point.nomogramReference.zone.label}'),
+        Text(
+          point.nomogramReference.isAvailable
+              ? 'Reference ${point.nomogramReference.source}'
+              : 'Reference unavailable: ${point.nomogramReference.unavailableReason ?? 'nomogram unavailable'}',
+        ),
         Text('Primary intensity ${_fixed(point.primaryIntensityValue, 1)}%'),
         Text(
           'Source ${longitudinalIntensitySourceLabel(point.intensitySourceForSlope)}',
@@ -1043,6 +1161,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         ),
         Text('RPE ${_fixed(point.rpe, 1)}'),
         Text('Fatigue ${_fixed(point.fatigue, 1)}'),
+        if (point.notes != null) Text('Notes ${_shortText(point.notes!, 90)}'),
         if (point.classification != null)
           Text(_classLabel(point.classification)),
       ],
@@ -1053,36 +1172,80 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     LongitudinalPoint point, {
     required double? value,
     required Color color,
+    required String tooltip,
   }) {
     return LongitudinalChartPoint(
       sessionId: point.sessionId,
       label: point.date,
       value: value,
       color: color,
-      tooltip: _tooltip(point),
+      tooltip: tooltip,
     );
   }
 
-  String _tooltip(LongitudinalPoint point) {
-    final notes = point.notes == null ? null : _shortText(point.notes!, 90);
+  String _slopeTooltip(LongitudinalPoint point) {
     return [
       point.date,
       point.taskName ?? 'Session',
-      if (point.sport != null) 'Sport: ${point.sport}',
-      if (point.sessionType != null) 'Type: ${point.sessionType}',
-      if (point.protocolName != null) 'Protocol: ${point.protocolName}',
-      if (point.contextEnvironment != null)
-        'Context: ${point.contextEnvironment}',
       'Slope: ${_fixed(point.interpretedSlope, 3)}',
-      'ITL: ${_fixed(point.itlIndex, 3)}',
-      'Intensity: ${_fixed(point.primaryIntensityValue, 1)}%',
-      'Metric: ${point.primaryIntensityMetric == null ? '-' : longitudinalIntensityMetricLabel(point.primaryIntensityMetric!)}',
-      'Source: ${longitudinalIntensitySourceLabel(point.intensitySourceForSlope)}',
-      'RPE: ${_fixed(point.rpe, 1)}',
-      'Fatigue: ${_fixed(point.fatigue, 1)}',
-      'Class: ${_classLabel(point.classification)}',
-      if (notes != null) 'Notes: $notes',
+      'Zone: ${point.nomogramReference.zone.label}',
+      _intensityTooltipLine(point),
+      if (point.rpe != null) 'RPE: ${_fixed(point.rpe, 1)}',
     ].join('\n');
+  }
+
+  String _itlTooltip(LongitudinalPoint point) {
+    return [
+      point.date,
+      point.taskName ?? 'Session',
+      'ITL: ${_fixed(point.itlIndex, 3)}',
+      'Zone: ${point.nomogramReference.zone.label}',
+      _intensityTooltipLine(point),
+      'Slope: ${_fixed(point.interpretedSlope, 3)}',
+    ].join('\n');
+  }
+
+  String _overlayTooltip(LongitudinalPoint point) {
+    return [
+      point.date,
+      point.taskName ?? 'Session',
+      '${_overlayLabel()}: ${_fixed(_overlayValue(point), 1)}',
+      'Metric: ${_metricLabel(point)}',
+      'Source: ${longitudinalIntensitySourceLabel(point.intensitySourceForSlope)}',
+      if (point.rpe != null) 'RPE: ${_fixed(point.rpe, 1)}',
+    ].join('\n');
+  }
+
+  String _residualTooltip(LongitudinalPoint point) {
+    return [
+      point.date,
+      point.taskName ?? 'Session',
+      'Residual: ${_fixed(point.residual, 3)}',
+      'Zone: ${point.nomogramReference.zone.label}',
+    ].join('\n');
+  }
+
+  String _intensityTooltipLine(LongitudinalPoint point) {
+    return 'Intensity: ${_fixed(point.primaryIntensityValue, 1)}% · ${_metricLabel(point)} · ${longitudinalIntensitySourceLabel(point.intensitySourceForSlope)}';
+  }
+
+  String _metricLabel(LongitudinalPoint point) {
+    final metric = point.primaryIntensityMetric;
+    return metric == null ? '-' : longitudinalIntensityMetricLabel(metric);
+  }
+
+  Color _slopePointColor(LongitudinalPoint point) {
+    if (_colorByOrellanaZone) {
+      return longitudinalRecoveryZoneColor(point.nomogramReference.zone);
+    }
+    return _classificationColor(point.classification);
+  }
+
+  Color _itlPointColor(LongitudinalPoint point) {
+    if (_colorByOrellanaZone) {
+      return longitudinalRecoveryZoneColor(point.nomogramReference.zone);
+    }
+    return AppColors.tertiary;
   }
 
   LongitudinalPoint? _selectedPoint(LongitudinalSeries series) {
@@ -1191,6 +1354,32 @@ Widget _row(String label, String value, {Color? valueColor}) {
   );
 }
 
+class _ZoneLegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _ZoneLegendItem({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+}
+
 double? _parseNullableDouble(String value) {
   final text = value.trim();
   if (text.isEmpty) return null;
@@ -1256,5 +1445,18 @@ Color _classificationColor(String? value) {
       return AppColors.classLowFast;
     default:
       return AppColors.tertiary;
+  }
+}
+
+Color longitudinalRecoveryZoneColor(LongitudinalRecoveryZone zone) {
+  switch (zone) {
+    case LongitudinalRecoveryZone.low:
+      return AppColors.warning;
+    case LongitudinalRecoveryZone.normal:
+      return AppColors.primary;
+    case LongitudinalRecoveryZone.favorable:
+      return AppColors.success;
+    case LongitudinalRecoveryZone.unavailable:
+      return AppColors.textHint;
   }
 }

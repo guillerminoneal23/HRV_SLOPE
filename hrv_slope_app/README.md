@@ -9,7 +9,7 @@ This tool supports training analysis. It is not a medical diagnostic tool.
 ## Current Status
 
 - Phase 5.1 release readiness pass complete.
-- Latest gate: 399/399 tests passing.
+- Latest gate: 411/411 tests passing.
 - Database schema version: 4.
 - Direct RMSSD input remains the recommended/default workflow.
 - RR interval input is available as an advanced workflow.
@@ -31,6 +31,8 @@ Implemented:
 - group report
 - population nomogram
 - athlete longitudinal dashboard with comparable-session filters
+- longitudinal Slope/ITL trends can show `slope_Orellana_19` references when
+  primary intensity is available
 - individual and hybrid nomogram overlay
 - CSV export for individual reports, group reports, longitudinal dashboards,
   individual nomograms, and population nomogram curve points

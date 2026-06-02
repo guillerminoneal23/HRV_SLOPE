@@ -20,6 +20,18 @@ class LongitudinalChartPoint {
   });
 }
 
+class LongitudinalChartReferenceSeries {
+  final String label;
+  final List<LongitudinalChartPoint> points;
+  final Color color;
+
+  const LongitudinalChartReferenceSeries({
+    required this.label,
+    required this.points,
+    required this.color,
+  });
+}
+
 class LongitudinalChartYAxisScale {
   final double minY;
   final double maxY;
@@ -91,6 +103,7 @@ class LongitudinalChart extends StatelessWidget {
   final double? yMin;
   final double? yMax;
   final double? yInterval;
+  final List<LongitudinalChartReferenceSeries> referenceSeries;
 
   const LongitudinalChart({
     super.key,
@@ -104,6 +117,7 @@ class LongitudinalChart extends StatelessWidget {
     this.yMin,
     this.yMax,
     this.yInterval,
+    this.referenceSeries = const [],
   });
 
   @override
@@ -112,8 +126,16 @@ class LongitudinalChart extends StatelessWidget {
     for (var i = 0; i < points.length; i++) {
       if (points[i].value != null) valid.add((index: i, point: points[i]));
     }
+    final referenceBars = [
+      for (final series in referenceSeries) ..._referenceBars(series),
+    ];
+    final hasReferenceLine = referenceBars.any((bar) => bar.spots.length >= 2);
     final yScale = resolveLongitudinalYAxisScale(
-      points.map((point) => point.value),
+      [
+        ...points.map((point) => point.value),
+        for (final series in referenceSeries)
+          ...series.points.map((point) => point.value),
+      ],
       yMin: yMin,
       yMax: yMax,
       yInterval: yInterval,
@@ -131,7 +153,7 @@ class LongitudinalChart extends StatelessWidget {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
-            if (valid.length < 2)
+            if (valid.length < 2 && !hasReferenceLine)
               Text(
                 emptyMessage,
                 style: const TextStyle(color: AppColors.textHint),
@@ -146,34 +168,33 @@ class LongitudinalChart extends StatelessWidget {
                     minY: yScale.minY,
                     maxY: yScale.maxY,
                     lineBarsData: [
-                      LineChartBarData(
-                        spots: [
-                          for (final item in valid)
-                            FlSpot(item.index.toDouble(), item.point.value!),
-                        ],
-                        isCurved: false,
-                        color: AppColors.primary,
-                        barWidth: 2,
-                        dotData: FlDotData(
-                          show: true,
-                          getDotPainter: (spot, xPercentage, bar, indexInBar) {
-                            final point = valid
-                                .firstWhere(
-                                  (item) => item.index.toDouble() == spot.x,
-                                )
-                                .point;
-                            final selected =
-                                point.sessionId != null &&
-                                point.sessionId == selectedSessionId;
-                            return FlDotCirclePainter(
-                              radius: selected ? 6 : 4,
-                              color: point.color ?? AppColors.tertiary,
-                              strokeWidth: selected ? 2 : 1,
-                              strokeColor: Colors.white,
-                            );
-                          },
+                      if (valid.isNotEmpty)
+                        LineChartBarData(
+                          spots: [
+                            for (final item in valid)
+                              FlSpot(item.index.toDouble(), item.point.value!),
+                          ],
+                          isCurved: false,
+                          color: AppColors.primary,
+                          barWidth: 2,
+                          dotData: FlDotData(
+                            show: true,
+                            getDotPainter:
+                                (spot, xPercentage, bar, indexInBar) {
+                                  final point = _pointForSpot(spot);
+                                  final selected =
+                                      point?.sessionId != null &&
+                                      point?.sessionId == selectedSessionId;
+                                  return FlDotCirclePainter(
+                                    radius: selected ? 6 : 4,
+                                    color: point?.color ?? AppColors.tertiary,
+                                    strokeWidth: selected ? 2 : 1,
+                                    strokeColor: Colors.white,
+                                  );
+                                },
+                          ),
                         ),
-                      ),
+                      ...referenceBars,
                     ],
                     gridData: FlGridData(
                       show: true,
@@ -253,7 +274,7 @@ class LongitudinalChart extends StatelessWidget {
                           return [
                             for (final spot in spots)
                               LineTooltipItem(
-                                _tooltipFor(spot, valid),
+                                _tooltipFor(spot),
                                 const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
@@ -269,11 +290,8 @@ class LongitudinalChart extends StatelessWidget {
                         }
                         final spot = response?.lineBarSpots?.firstOrNull;
                         if (spot == null) return;
-                        final point = valid
-                            .firstWhere(
-                              (item) => item.index.toDouble() == spot.x,
-                            )
-                            .point;
+                        final point = _pointForSpot(spot);
+                        if (point == null) return;
                         final sessionId = point.sessionId;
                         if (sessionId != null) onPointSelected?.call(sessionId);
                       },
@@ -282,6 +300,19 @@ class LongitudinalChart extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 8),
+            if (referenceSeries.isNotEmpty) ...[
+              Wrap(
+                spacing: 12,
+                runSpacing: 6,
+                children: [
+                  _legendItem('Observed $valueLabel', AppColors.primary),
+                  for (final series in referenceSeries)
+                    if (series.points.any((point) => point.value != null))
+                      _legendItem(series.label, series.color),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
             Text(
               'Line: session trend · Dots: available values · X-axis: $xAxisLabel',
               style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
@@ -292,14 +323,72 @@ class LongitudinalChart extends StatelessWidget {
     );
   }
 
-  String _tooltipFor(
-    LineBarSpot spot,
-    List<({int index, LongitudinalChartPoint point})> valid,
+  List<LineChartBarData> _referenceBars(
+    LongitudinalChartReferenceSeries series,
   ) {
-    final item = valid.firstWhere((item) => item.index.toDouble() == spot.x);
-    final point = item.point;
+    final bars = <LineChartBarData>[];
+    var segment = <FlSpot>[];
+
+    void flushSegment() {
+      if (segment.isEmpty) return;
+      bars.add(_referenceBar(series, segment));
+      segment = <FlSpot>[];
+    }
+
+    for (var i = 0; i < series.points.length; i++) {
+      final value = series.points[i].value;
+      if (value == null) {
+        flushSegment();
+      } else {
+        segment.add(FlSpot(i.toDouble(), value));
+      }
+    }
+    flushSegment();
+    return bars;
+  }
+
+  LineChartBarData _referenceBar(
+    LongitudinalChartReferenceSeries series,
+    List<FlSpot> spots,
+  ) {
+    return LineChartBarData(
+      spots: spots,
+      isCurved: false,
+      color: series.color,
+      barWidth: 1.6,
+      dotData: const FlDotData(show: false),
+    );
+  }
+
+  Widget _legendItem(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 18, height: 3, color: color),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+
+  String _tooltipFor(LineBarSpot spot) {
+    final point = _pointForSpot(spot);
+    if (point == null) {
+      final touchedValue = spot.y.isFinite ? spot.y.toStringAsFixed(2) : '-';
+      return '$valueLabel: $touchedValue';
+    }
     return point.tooltip ??
         '${point.label}\n$valueLabel: ${point.value?.toStringAsFixed(2) ?? '-'}';
+  }
+
+  LongitudinalChartPoint? _pointForSpot(FlSpot spot) {
+    if (!spot.x.isFinite) return null;
+    final index = spot.x.round();
+    if (index < 0 || index >= points.length) return null;
+    return points[index];
   }
 
   String _formatAxis(double value) {

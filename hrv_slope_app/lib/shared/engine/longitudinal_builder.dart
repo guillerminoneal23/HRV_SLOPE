@@ -28,6 +28,88 @@ enum LongitudinalTrendDirection {
 
 enum LongitudinalXAxisMode { sessionOrder, date }
 
+enum LongitudinalRecoveryZone { low, normal, favorable, unavailable }
+
+extension LongitudinalRecoveryZoneText on LongitudinalRecoveryZone {
+  String get key {
+    switch (this) {
+      case LongitudinalRecoveryZone.low:
+        return 'low';
+      case LongitudinalRecoveryZone.normal:
+        return 'normal';
+      case LongitudinalRecoveryZone.favorable:
+        return 'favorable';
+      case LongitudinalRecoveryZone.unavailable:
+        return 'unavailable';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case LongitudinalRecoveryZone.low:
+        return 'Low';
+      case LongitudinalRecoveryZone.normal:
+        return 'Normal';
+      case LongitudinalRecoveryZone.favorable:
+        return 'Favorable';
+      case LongitudinalRecoveryZone.unavailable:
+        return 'Unavailable';
+    }
+  }
+}
+
+class LongitudinalNomogramReferencePoint {
+  final int sessionId;
+  final String date;
+  final double? primaryIntensityValue;
+  final String? primaryIntensityMetric;
+  final String intensitySourceForSlope;
+  final double? observedSlope;
+  final double? observedItl;
+  final double? referenceSlope;
+  final double? lowerSlopeThreshold;
+  final double? upperSlopeThreshold;
+  final double? referenceItl;
+  final double? lowerItlThreshold;
+  final double? upperItlThreshold;
+  final LongitudinalRecoveryZone zone;
+  final String source;
+  final String? unavailableReason;
+
+  const LongitudinalNomogramReferencePoint({
+    required this.sessionId,
+    required this.date,
+    this.primaryIntensityValue,
+    this.primaryIntensityMetric,
+    this.intensitySourceForSlope = 'Unknown',
+    this.observedSlope,
+    this.observedItl,
+    this.referenceSlope,
+    this.lowerSlopeThreshold,
+    this.upperSlopeThreshold,
+    this.referenceItl,
+    this.lowerItlThreshold,
+    this.upperItlThreshold,
+    required this.zone,
+    this.source = kSlopeOrellana19PresetName,
+    this.unavailableReason,
+  });
+
+  bool get isAvailable => zone != LongitudinalRecoveryZone.unavailable;
+}
+
+class LongitudinalNomogramReferenceSeries {
+  final String source;
+  final List<LongitudinalNomogramReferencePoint> points;
+
+  const LongitudinalNomogramReferenceSeries({
+    this.source = kSlopeOrellana19PresetName,
+    this.points = const [],
+  });
+
+  int get availableCount => points.where((point) => point.isAvailable).length;
+}
+
 class LongitudinalRange {
   final double? min;
   final double? max;
@@ -369,6 +451,11 @@ class LongitudinalDataCompleteness {
   final int withInternalFallback;
   final int withRpe;
   final int withFatigue;
+  final int withSlopeOrellana19Reference;
+  final int missingReferencePrimaryIntensity;
+  final int referenceZoneLow;
+  final int referenceZoneNormal;
+  final int referenceZoneFavorable;
   final int missingKeyData;
 
   const LongitudinalDataCompleteness({
@@ -380,6 +467,11 @@ class LongitudinalDataCompleteness {
     required this.withInternalFallback,
     required this.withRpe,
     required this.withFatigue,
+    required this.withSlopeOrellana19Reference,
+    required this.missingReferencePrimaryIntensity,
+    required this.referenceZoneLow,
+    required this.referenceZoneNormal,
+    required this.referenceZoneFavorable,
     required this.missingKeyData,
   });
 }
@@ -412,6 +504,7 @@ class LongitudinalPoint {
   final String? hrvInputMode;
   final String? recoveryWindowLabel;
   final String? notes;
+  final LongitudinalNomogramReferencePoint nomogramReference;
   final List<String> warnings;
 
   const LongitudinalPoint({
@@ -442,6 +535,12 @@ class LongitudinalPoint {
     this.hrvInputMode,
     this.recoveryWindowLabel,
     this.notes,
+    this.nomogramReference = const LongitudinalNomogramReferencePoint(
+      sessionId: 0,
+      date: '',
+      zone: LongitudinalRecoveryZone.unavailable,
+      unavailableReason: 'nomogram unavailable',
+    ),
     this.warnings = const [],
   });
 
@@ -465,6 +564,7 @@ class LongitudinalSeries {
   final LongitudinalDashboardFilter filter;
   final LongitudinalFilterOptions filterOptions;
   final LongitudinalDataCompleteness completeness;
+  final LongitudinalNomogramReferenceSeries nomogramReferenceSeries;
   final List<String> activeFilterLabels;
   final int comparableIncludedCount;
   final int comparableTotalCount;
@@ -494,8 +594,14 @@ class LongitudinalSeries {
       withInternalFallback: 0,
       withRpe: 0,
       withFatigue: 0,
+      withSlopeOrellana19Reference: 0,
+      missingReferencePrimaryIntensity: 0,
+      referenceZoneLow: 0,
+      referenceZoneNormal: 0,
+      referenceZoneFavorable: 0,
       missingKeyData: 0,
     ),
+    this.nomogramReferenceSeries = const LongitudinalNomogramReferenceSeries(),
     this.activeFilterLabels = const [],
     this.comparableIncludedCount = 0,
     this.comparableTotalCount = 0,
@@ -607,6 +713,9 @@ LongitudinalSeries buildLongitudinalSeries({
     filter: filter,
     filterOptions: options,
     completeness: _completeness(points, allPoints.length),
+    nomogramReferenceSeries: LongitudinalNomogramReferenceSeries(
+      points: List.unmodifiable(points.map((p) => p.nomogramReference)),
+    ),
     activeFilterLabels: List.unmodifiable(activeLabels),
     comparableIncludedCount: filter.comparableSessionsOnly
         ? points.length
@@ -650,6 +759,18 @@ LongitudinalPoint _pointFromDetail(
       external.where((v) => v.isPrimaryForNomogram).firstOrNull ??
       (external.isEmpty ? null : external.first);
   final sourceLabel = intensitySourceForSlopeLabel(session.intensitySource);
+  final primaryIntensityMetric = primaryIntensityMetricFromMethod(
+    session.intensitySource,
+  );
+  final nomogramReference = buildSlopeOrellana19LongitudinalReference(
+    sessionId: session.id,
+    date: session.date,
+    primaryIntensityValue: session.intensityPercent,
+    primaryIntensityMetric: primaryIntensityMetric,
+    intensitySourceForSlope: sourceLabel,
+    observedSlope: session.slopeInterpreted,
+    observedItl: session.itlIndex,
+  );
 
   return LongitudinalPoint(
     sessionId: session.id,
@@ -665,9 +786,7 @@ LongitudinalPoint _pointFromDetail(
     intensityPercent: session.intensityPercent,
     primaryIntensityValue: session.intensityPercent,
     intensitySourceForSlope: sourceLabel,
-    primaryIntensityMetric: primaryIntensityMetricFromMethod(
-      session.intensitySource,
-    ),
+    primaryIntensityMetric: primaryIntensityMetric,
     interpretedSlope: session.slopeInterpreted,
     rawSlope: session.slopeRaw,
     itlIndex: session.itlIndex,
@@ -688,7 +807,72 @@ LongitudinalPoint _pointFromDetail(
     hrvInputMode: session.hrvInputMode,
     recoveryWindowLabel: _recoveryWindowLabel(session),
     notes: _notesText(detail),
+    nomogramReference: nomogramReference,
     warnings: List.unmodifiable(warnings),
+  );
+}
+
+LongitudinalNomogramReferencePoint buildSlopeOrellana19LongitudinalReference({
+  required int sessionId,
+  required String date,
+  required double? primaryIntensityValue,
+  required String? primaryIntensityMetric,
+  required String intensitySourceForSlope,
+  required double? observedSlope,
+  required double? observedItl,
+}) {
+  if (!_isInformativeIntensity(primaryIntensityValue)) {
+    return LongitudinalNomogramReferencePoint(
+      sessionId: sessionId,
+      date: date,
+      primaryIntensityValue: primaryIntensityValue,
+      primaryIntensityMetric: primaryIntensityMetric,
+      intensitySourceForSlope: intensitySourceForSlope,
+      observedSlope: observedSlope,
+      observedItl: observedItl,
+      zone: LongitudinalRecoveryZone.unavailable,
+      unavailableReason: 'missing primary intensity',
+    );
+  }
+  if (!_isPositiveFinite(observedSlope)) {
+    return LongitudinalNomogramReferencePoint(
+      sessionId: sessionId,
+      date: date,
+      primaryIntensityValue: primaryIntensityValue,
+      primaryIntensityMetric: primaryIntensityMetric,
+      intensitySourceForSlope: intensitySourceForSlope,
+      observedSlope: observedSlope,
+      observedItl: observedItl,
+      zone: LongitudinalRecoveryZone.unavailable,
+      unavailableReason: 'missing slope',
+    );
+  }
+
+  final classification = classifySlopeWithPopulationNomogram(
+    primaryIntensityValue!,
+    observedSlope!,
+    source: PopulationNomogramSource.slopeOrellana19,
+  );
+  final lowerSlope = classification.expectedLower;
+  final referenceSlope = classification.expectedMean;
+  final upperSlope = classification.expectedUpper;
+
+  return LongitudinalNomogramReferencePoint(
+    sessionId: sessionId,
+    date: date,
+    primaryIntensityValue: primaryIntensityValue,
+    primaryIntensityMetric: primaryIntensityMetric,
+    intensitySourceForSlope: intensitySourceForSlope,
+    observedSlope: classification.observedSlope,
+    observedItl: observedItl,
+    referenceSlope: referenceSlope,
+    lowerSlopeThreshold: lowerSlope,
+    upperSlopeThreshold: upperSlope,
+    referenceItl: _itlFromSlope(referenceSlope),
+    lowerItlThreshold: _itlFromSlope(upperSlope),
+    upperItlThreshold: _itlFromSlope(lowerSlope),
+    zone: _recoveryZoneFromClassification(classification.classification),
+    source: classification.presetName ?? kSlopeOrellana19PresetName,
   );
 }
 
@@ -736,6 +920,29 @@ LongitudinalDataCompleteness _completeness(
         .length,
     withRpe: points.where((p) => p.rpe != null).length,
     withFatigue: points.where((p) => p.fatigue != null).length,
+    withSlopeOrellana19Reference: points
+        .where((p) => p.nomogramReference.isAvailable)
+        .length,
+    missingReferencePrimaryIntensity: points
+        .where(
+          (p) =>
+              p.nomogramReference.unavailableReason ==
+              'missing primary intensity',
+        )
+        .length,
+    referenceZoneLow: points
+        .where((p) => p.nomogramReference.zone == LongitudinalRecoveryZone.low)
+        .length,
+    referenceZoneNormal: points
+        .where(
+          (p) => p.nomogramReference.zone == LongitudinalRecoveryZone.normal,
+        )
+        .length,
+    referenceZoneFavorable: points
+        .where(
+          (p) => p.nomogramReference.zone == LongitudinalRecoveryZone.favorable,
+        )
+        .length,
     missingKeyData: points.where((p) => !p.isComplete).length,
   );
 }
@@ -990,4 +1197,31 @@ String _classificationKey(InternalLoadClassification classification) {
     case InternalLoadClassification.lowInternalLoadOrFastRecovery:
       return 'low_internal_load_or_fast_recovery';
   }
+}
+
+LongitudinalRecoveryZone _recoveryZoneFromClassification(
+  InternalLoadClassification classification,
+) {
+  switch (classification) {
+    case InternalLoadClassification.veryHighInternalLoad:
+    case InternalLoadClassification.highOrModerateInternalLoad:
+      return LongitudinalRecoveryZone.low;
+    case InternalLoadClassification.expectedResponse:
+      return LongitudinalRecoveryZone.normal;
+    case InternalLoadClassification.lowInternalLoadOrFastRecovery:
+      return LongitudinalRecoveryZone.favorable;
+  }
+}
+
+bool _isInformativeIntensity(double? value) {
+  return value != null && value.isFinite && value > 0;
+}
+
+bool _isPositiveFinite(double? value) {
+  return value != null && value.isFinite && value > 0;
+}
+
+double? _itlFromSlope(double? slope) {
+  if (!_isPositiveFinite(slope)) return null;
+  return 1 / slope!;
 }
