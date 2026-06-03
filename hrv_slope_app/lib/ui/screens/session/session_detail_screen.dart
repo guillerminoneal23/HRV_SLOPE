@@ -7,6 +7,7 @@ import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/data/services/session_edit_service.dart';
 import 'package:hrv_slope_app/shared/engine/intensity_resolver.dart';
+import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/screens/reports/individual_report_screen.dart';
 import 'package:hrv_slope_app/ui/screens/session/session_edit_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
@@ -202,10 +203,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               primaryIntensityMetricFromMethod(session.intensitySource),
             ),
             _row(
-              'Classification',
+              'Response',
               session.isDraft
                   ? 'Draft: not calculated'
-                  : session.classification,
+                  : recoveryResponseLabelForClassificationKey(
+                      session.classification,
+                    ),
             ),
           ]),
           if (session.hrvInputMode == 'rr_intervals')

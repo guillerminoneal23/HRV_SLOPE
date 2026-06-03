@@ -49,13 +49,14 @@ const List<InstructionChapter> instructionsChapters = [
       InstructionSection(
         id: 'what_is_rmssd_slope',
         title: 'What is RMSSD-Slope?',
-        summary: 'The core training-load recovery metric used by the app.',
+        summary:
+            'The core post-effort recovery-response metric used by the app.',
         body:
             'RMSSD-Slope = (RMSSD_recovery - RMSSD_exercise) / t. Lower slope '
-            'generally indicates higher internal load or slower '
-            'parasympathetic recovery for the same external load. Higher slope '
-            'generally indicates faster recovery or lower internal load. '
-            'Always interpret the value with training context.',
+            'generally indicates a lower-than-expected post-effort response '
+            'for the same intensity. Higher slope generally indicates an '
+            'expected or favorable recovery response. Always interpret the '
+            'value with training context.',
       ),
       InstructionSection(
         id: 'question_answered',
@@ -64,8 +65,9 @@ const List<InstructionChapter> instructionsChapters = [
         body:
             'The app compares observed RMSSD-Slope with population, '
             'individual, and hybrid references when enough data are available. '
-            'It helps review whether recovery was slower, expected, or faster '
-            'than reference behavior for the recorded intensity.',
+            'It helps review whether the post-effort response was '
+            'lower-than-expected, expected, or favorable compared with '
+            'reference behavior for the recorded intensity.',
       ),
       InstructionSection(
         id: 'what_it_does_not_do',
@@ -85,7 +87,7 @@ const List<InstructionChapter> instructionsChapters = [
         body: kInstructionsRecommendedWorkflow,
         bullets: [
           'Create or select an athlete.',
-          'Enter session, external load, internal load, and HRV data.',
+          'Enter session, external intensity, internal intensity, and HRV data.',
           'Prefer direct RMSSD from Elite HRV, Kubios, HRV Logger, Polar, Garmin, or similar tools.',
           'Review the calculation preview before saving.',
           'Use reports, longitudinal trends, and nomograms for context.',
@@ -178,7 +180,7 @@ const List<InstructionChapter> instructionsChapters = [
         summary: 'Sessions combine task context, load variables, and HRV data.',
         body:
             'Each session should include date, task name, sport or session '
-            'type, external load, internal load, HRV/RMSSD data, and recovery '
+            'type, external intensity, internal intensity, HRV/RMSSD data, and recovery '
             'window timing when available.',
       ),
       InstructionSection(
@@ -209,14 +211,17 @@ const List<InstructionChapter> instructionsChapters = [
       InstructionSection(
         id: 'intensity_percent',
         title: 'intensity_percent requirements',
-        summary: 'Primary intensity can come from external or internal load.',
+        summary:
+            'Primary intensity can come from external or internal sources.',
         body:
             'The app prioritizes external intensity when a valid external '
             'metric is available. If no valid external metric is recorded, it '
             'can use internal intensity such as RPE or subjective fatigue for '
             'slope interpretation. RPE and fatigue are converted from a 0-10 '
-            'scale to a 0-100 intensity percent. No strong intensity-based '
-            'classification is produced when both external and internal '
+            'scale to a 0-100 intensity percent. High RPE or fatigue does not '
+            'automatically mean poor recovery; interpretation depends on the '
+            'post-effort slope response versus the reference. No recovery '
+            'interpretation is produced when both external and internal '
             'intensity are unknown.',
         bullets: [
           'External intensity is preferred when available.',
@@ -230,7 +235,7 @@ const List<InstructionChapter> instructionsChapters = [
         summary: 'Draft sessions can store partial information.',
         body:
             'Incomplete or draft sessions should not show slope or '
-            'classification until the required scientific inputs are present.',
+            'recovery-response interpretation until the required scientific inputs are present.',
       ),
     ],
   ),
@@ -366,11 +371,11 @@ const List<InstructionChapter> instructionsChapters = [
         id: 'raw_vs_interpreted_slope',
         title: 'Raw slope vs interpreted slope',
         summary:
-            'Both are preserved, but interpreted slope is used for classification.',
+            'Both are preserved, but interpreted slope is used for recovery interpretation.',
         body:
             'Raw slope is the direct calculation. Interpreted slope preserves '
             'the minimum interpretive value of 0.1 and is used for ITL and '
-            'classification.',
+            'recovery-response interpretation.',
       ),
       InstructionSection(
         id: 'itl_index',
@@ -382,12 +387,14 @@ const List<InstructionChapter> instructionsChapters = [
       ),
       InstructionSection(
         id: 'classification_language',
-        title: 'Classification language',
-        summary: 'Labels describe training-load response context.',
+        title: 'Recovery response language',
+        summary: 'Labels describe post-effort recovery response context.',
         body:
-            'Classification compares observed interpreted slope with expected '
+            'Recovery response compares observed interpreted slope with expected '
             'lower, mean, and upper bands at the session intensity. No '
-            'classification is produced without intensity_percent.',
+            'recovery interpretation is produced without intensity_percent. '
+            'RPE and fatigue describe perceived demand; they are not judged '
+            'as negative without the slope response.',
       ),
       InstructionSection(
         id: 'population_nomogram',
@@ -431,7 +438,7 @@ const List<InstructionChapter> instructionsChapters = [
         summary: 'Trends help review repeated-session patterns.',
         body:
             'The longitudinal dashboard shows slope, ITL, residuals, rolling '
-            'averages, and load overlays across sessions.',
+            'averages, and intensity overlays across sessions.',
       ),
       InstructionSection(
         id: 'fatigue_flags',
@@ -454,7 +461,7 @@ const List<InstructionChapter> instructionsChapters = [
         summary: 'Review one session in detail.',
         body:
             'The individual report shows athlete, session, load variables, HRV '
-            'data, raw slope, interpreted slope, ITL, classification, and '
+            'data, raw slope, interpreted slope, ITL, recovery response, and '
             'population nomogram placement.',
       ),
       InstructionSection(
@@ -463,7 +470,8 @@ const List<InstructionChapter> instructionsChapters = [
         summary: 'Compare matching sessions across athletes.',
         body:
             'The group report ranks complete sessions by interpreted slope '
-            'ascending, where lower slope indicates higher internal load.',
+            'ascending, where lower slope indicates a lower post-effort '
+            'response relative to the reference.',
       ),
       InstructionSection(
         id: 'population_screen',
@@ -479,7 +487,7 @@ const List<InstructionChapter> instructionsChapters = [
         summary: 'Review athlete trends over time.',
         body:
             'The dashboard shows slope, ITL, load overlays, residual trends, '
-            'fatigue/context flags, and session links.',
+            'fatigue/context flags, the RPE vs Slope response chart, and session links.',
       ),
       InstructionSection(
         id: 'individual_nomogram_screen',
@@ -549,7 +557,7 @@ const List<InstructionChapter> instructionsChapters = [
             'Interpret with workload, recovery, sleep, illness, travel, and context',
         summary: 'No metric explains the whole athlete state.',
         body:
-            'Review external load, internal load, recovery, sleep, illness, '
+            'Review external intensity, internal intensity, recovery, sleep, illness, '
             'travel, environment, and notes before making training decisions.',
       ),
       InstructionSection(

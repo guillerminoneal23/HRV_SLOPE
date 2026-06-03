@@ -64,6 +64,24 @@ void main() {
       expect(text, contains('subjective fatigue'));
     });
 
+    test('recovery-response framing explains high RPE is contextual', () {
+      final text = allInstructionText();
+
+      expect(text, contains('post-effort slope response versus the reference'));
+      expect(
+        text,
+        contains(
+          'High RPE or fatigue does not automatically mean poor recovery',
+        ),
+      );
+      expect(
+        text,
+        contains(
+          'RPE and fatigue describe perceived demand; they are not judged',
+        ),
+      );
+    });
+
     test('forbidden medical diagnostic claims are absent', () {
       final text = allInstructionText().toLowerCase();
 

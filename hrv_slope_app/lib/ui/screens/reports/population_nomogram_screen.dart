@@ -6,6 +6,7 @@ import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/nomogram_chart.dart';
 
@@ -311,23 +312,15 @@ String _classificationFor(Session session) {
 }
 
 String _classificationLabel(String value) {
-  switch (value) {
-    case 'very_high_internal_load':
-      return 'Very high';
-    case 'high_or_moderate_internal_load':
-      return 'High/moderate';
-    case 'expected_response':
-      return 'Expected';
-    case 'low_internal_load_or_fast_recovery':
-      return 'Low/fast';
-    default:
-      return value.isEmpty ? '-' : value;
-  }
+  if (value.isEmpty) return '-';
+  return recoveryResponseShortLabelForClassificationKey(value);
 }
 
 Color _classificationColor(String value) {
   switch (value) {
     case 'very_high_internal_load':
+    case 'Lower-than-expected recovery response':
+    case 'Lower-than-expected':
       return AppColors.classVeryHigh;
     case 'high_or_moderate_internal_load':
       return AppColors.classHighMod;

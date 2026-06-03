@@ -90,7 +90,7 @@ void main() {
     test('exports ranked rows and incomplete rows', () {
       final export = exportGroupReportRowsCsv(_groupReport());
 
-      expect(export.content, contains('rank,athlete_id'));
+      expect(export.content, contains('filter_summary,rank,athlete_id'));
       expect(export.content, contains('Runner B'));
       expect(export.content, contains('Missing slope'));
     });
@@ -99,8 +99,20 @@ void main() {
       final export = exportGroupReportSummaryCsv(_groupReport());
 
       expect(export.content, contains('n_sessions'));
-      expect(export.content, contains('n_high_or_moderate_internal_load'));
+      expect(
+        export.content,
+        contains('n_lower_than_expected_recovery_response'),
+      );
       expect(export.content, contains('0.45'));
+    });
+
+    test('exports filter summary for filtered group reports', () {
+      final export = exportGroupReportRowsCsv(
+        _groupReport(activeFilterLabels: const ['Athlete: Runner B']),
+      );
+
+      expect(export.content, contains('filter_summary'));
+      expect(export.content, contains('Athlete: Runner B'));
     });
   });
 
@@ -235,7 +247,7 @@ void main() {
         expect(export.content, contains('high_rpe_favorable_slope_response'));
         expect(
           export.content,
-          contains('High RPE + adequate/favorable slope response'),
+          contains('High RPE + adequate/favorable recovery response'),
         );
         expect(export.content, contains('External'));
         expect(export.content, contains('direct_percent_mas'));
@@ -505,8 +517,9 @@ IndividualReportData _individualReport({
       residual: 1.66,
       residualPercent: 488.235,
       classification: classification,
-      classificationLabel: 'Expected response',
-      interpretationText: 'Within expected range for this intensity.',
+      classificationLabel: 'Expected recovery response',
+      interpretationText:
+          'The post-effort response is within the expected recovery-response band for this intensity.',
       warnings: ['Check context'],
     ),
     warnings: const ['Check context'],
@@ -515,7 +528,7 @@ IndividualReportData _individualReport({
   );
 }
 
-GroupReportData _groupReport() {
+GroupReportData _groupReport({List<String> activeFilterLabels = const []}) {
   const rows = [
     GroupReportRow(
       athleteId: 2,
@@ -557,12 +570,13 @@ GroupReportData _groupReport() {
       isCompleteForNomogram: false,
     ),
   ];
-  return const GroupReportData(
+  return GroupReportData(
     title: 'Group Report',
     dateRange: 'All dates',
     presetName: 'excel_operational',
+    activeFilterLabels: activeFilterLabels,
     rows: rows,
-    summary: GroupReportSummary(
+    summary: const GroupReportSummary(
       nSessions: 2,
       nAthletes: 2,
       nComplete: 1,

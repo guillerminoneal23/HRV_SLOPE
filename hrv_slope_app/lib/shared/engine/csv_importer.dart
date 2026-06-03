@@ -133,7 +133,7 @@ class CsvParsedRow {
       powerW != null ||
       percentMap != null;
 
-  /// Whether this row has at least one internal load variable.
+  /// Whether this row has at least one internal intensity variable.
   bool get hasInternalLoad => rpe110 != null || srpe != null || trimp != null;
 
   /// Whether this row has sufficient HRV data for slope calculation.
@@ -253,7 +253,7 @@ CsvColumnMapping autoMapColumns(List<String> headers) {
 /// [csvContent] is the raw CSV text.
 /// [mapping] is the column mapping to use. If null, auto-mapping is attempted.
 /// [validateCalculation] when true, adds warnings for rows missing
-/// external load, internal load, or HRV data.
+/// external intensity, internal intensity, or HRV data.
 CsvImportResult parseCsvImport(
   String csvContent, {
   CsvColumnMapping? mapping,
@@ -351,7 +351,7 @@ CsvImportResult parseCsvImport(
       }
       if (!parsedRow.hasInternalLoad) {
         rowWarnings.add(
-          'Row $rowIdx: No internal load variable found. '
+          'Row $rowIdx: No internal intensity variable found. '
           'Cannot compute full analysis.',
         );
       }

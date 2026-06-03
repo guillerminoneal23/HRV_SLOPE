@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
+import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/screens/longitudinal/athlete_longitudinal_screen.dart';
 import 'package:hrv_slope_app/ui/screens/nomogram/individual_nomogram_screen.dart';
 import 'package:hrv_slope_app/ui/screens/session/session_detail_screen.dart';
@@ -270,7 +271,9 @@ class _SessionTile extends StatelessWidget {
             else if (session.slopeInterpreted != null)
               'Slope: ${session.slopeInterpreted!.toStringAsFixed(2)}',
             if (!session.isDraft && session.classification != null)
-              session.classification!,
+              recoveryResponseShortLabelForClassificationKey(
+                session.classification,
+              ),
           ].join(' · '),
           style: const TextStyle(fontSize: 12),
         ),

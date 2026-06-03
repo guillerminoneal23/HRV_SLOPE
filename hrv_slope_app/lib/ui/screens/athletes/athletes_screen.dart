@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
+import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/screens/athletes/athlete_form_dialog.dart';
 import 'package:hrv_slope_app/ui/screens/athletes/athlete_detail_screen.dart';
@@ -392,7 +393,9 @@ class _AthleteCard extends StatelessWidget {
                       if (latestSession?.classification != null)
                         _InfoChip(
                           icon: Icons.assessment,
-                          label: latestSession!.classification!,
+                          label: recoveryResponseShortLabelForClassificationKey(
+                            latestSession!.classification,
+                          ),
                           color: _classificationColor(
                             latestSession!.classification!,
                           ),
@@ -410,7 +413,8 @@ class _AthleteCard extends StatelessWidget {
 
   Color _classificationColor(String classification) {
     if (classification.contains('very_high') ||
-        classification.contains('Very high')) {
+        classification.contains('Very high') ||
+        classification.contains('Lower-than-expected')) {
       return AppColors.classVeryHigh;
     }
     if (classification.contains('high') || classification.contains('poor')) {

@@ -58,13 +58,13 @@ extension RpeSlopeQuadrantText on RpeSlopeQuadrant {
   String get label {
     switch (this) {
       case RpeSlopeQuadrant.lowRpeLowSlopeResponse:
-        return 'Low RPE + low slope response';
+        return 'Low/moderate RPE + lower-than-expected recovery response';
       case RpeSlopeQuadrant.lowRpeFavorableSlopeResponse:
-        return 'Low RPE + adequate/favorable slope response';
+        return 'Low/moderate RPE + adequate/favorable recovery response';
       case RpeSlopeQuadrant.highRpeLowSlopeResponse:
-        return 'High RPE + low slope response';
+        return 'High RPE + lower-than-expected recovery response';
       case RpeSlopeQuadrant.highRpeFavorableSlopeResponse:
-        return 'High RPE + adequate/favorable slope response';
+        return 'High RPE + adequate/favorable recovery response';
       case RpeSlopeQuadrant.unavailable:
         return 'Unavailable';
     }
@@ -73,13 +73,13 @@ extension RpeSlopeQuadrantText on RpeSlopeQuadrant {
   String get interpretation {
     switch (this) {
       case RpeSlopeQuadrant.lowRpeLowSlopeResponse:
-        return 'Lower perceived effort but lower-than-expected recovery response. Review context.';
+        return 'The session had lower perceived effort, but the post-effort response was lower than expected. Review context such as sleep, stress, heat, humidity, travel, or accumulated fatigue.';
       case RpeSlopeQuadrant.lowRpeFavorableSlopeResponse:
-        return 'Low perceived effort with adequate or favorable slope response.';
+        return 'The session had lower perceived effort with an adequate or favorable post-effort response.';
       case RpeSlopeQuadrant.highRpeLowSlopeResponse:
-        return 'Demanding perceived effort with lower-than-expected recovery response.';
+        return 'The session was perceived as demanding, and the post-effort response was lower than expected. Review recent load, context, and recovery conditions.';
       case RpeSlopeQuadrant.highRpeFavorableSlopeResponse:
-        return 'Demanding perceived effort with adequate or favorable recovery response.';
+        return 'The session was perceived as demanding, and the post-effort response was adequate or favorable.';
       case RpeSlopeQuadrant.unavailable:
         return 'Not enough data to classify.';
     }
@@ -103,9 +103,9 @@ extension LongitudinalRecoveryZoneText on LongitudinalRecoveryZone {
   String get label {
     switch (this) {
       case LongitudinalRecoveryZone.low:
-        return 'Low';
+        return 'Lower-than-expected';
       case LongitudinalRecoveryZone.normal:
-        return 'Normal';
+        return 'Expected';
       case LongitudinalRecoveryZone.favorable:
         return 'Favorable';
       case LongitudinalRecoveryZone.unavailable:

@@ -9,7 +9,7 @@
 /// 5. speed_kmh / athlete.vVO2max_kmh
 /// 6. power_w / athlete.MAP_w
 ///
-/// If no valid external intensity is available, internal load can be converted
+/// If no valid external intensity is available, internal intensity can be converted
 /// to a 0-100 intensity percent for slope interpretation. Zero is treated as
 /// non-informative for both external percent inputs and 0-10 internal scales.
 library;
@@ -34,7 +34,7 @@ class SlopeIntensityResolution {
   /// Broad source of the primary intensity.
   final IntensitySourceForSlope source;
 
-  /// True when internal load is used because valid external load is absent.
+  /// True when internal intensity is used because valid external intensity is absent.
   final bool isFallback;
 
   /// Human-readable reason for the selected source or unresolved state.
@@ -283,7 +283,7 @@ IntensityResolution resolvePrimaryIntensityForSlope({
         'internal_${percentMetric.name}',
         [percentMetric.name],
         warnings,
-        'No valid external intensity was available; using normalized internal load.',
+        'No valid external intensity was available; using normalized internal intensity.',
       );
     }
     warnings.add(

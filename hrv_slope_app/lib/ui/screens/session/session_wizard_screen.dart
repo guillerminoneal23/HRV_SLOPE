@@ -1125,17 +1125,17 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
           _pRow('ITL index (1/slope)', p.itlIndex.toStringAsFixed(4)),
         ]),
         if (p.canClassify)
-          _previewCard('Nomogram Classification', [
+          _previewCard('Recovery Response Reference', [
             _pRow('Expected lower', p.expectedLower!.toStringAsFixed(3)),
             _pRow('Expected mean', p.expectedMean!.toStringAsFixed(3)),
             _pRow('Expected upper', p.expectedUpper!.toStringAsFixed(3)),
-            _pRow('Classification', p.classification ?? '-'),
+            _pRow('Response', p.classification ?? '-'),
             _pRow('Residual', p.residual!.toStringAsFixed(3)),
             _pRow('Residual %', '${p.residualPercent!.toStringAsFixed(1)}%'),
           ])
         else
-          _previewCard('Nomogram Classification', [
-            _pRow('Status', 'Cannot classify — intensity % missing'),
+          _previewCard('Recovery Response Reference', [
+            _pRow('Status', 'Insufficient data for recovery interpretation'),
           ]),
         if (p.warnings.isNotEmpty)
           _previewCard('Warnings', [for (final w in p.warnings) _pRow('⚠', w)]),

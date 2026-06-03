@@ -69,16 +69,16 @@ class RpeSlopeQuadrantChart extends StatelessWidget {
               runSpacing: 6,
               children: [
                 _SummaryPill(
-                  '${data.summary.lowRpeFavorableSlopeResponse} low RPE + adequate/favorable',
+                  '${data.summary.lowRpeFavorableSlopeResponse} low/moderate RPE + adequate/favorable',
                 ),
                 _SummaryPill(
                   '${data.summary.highRpeFavorableSlopeResponse} high RPE + adequate/favorable',
                 ),
                 _SummaryPill(
-                  '${data.summary.highRpeLowSlopeResponse} high RPE + low response',
+                  '${data.summary.highRpeLowSlopeResponse} high RPE + lower-than-expected',
                 ),
                 _SummaryPill(
-                  '${data.summary.lowRpeLowSlopeResponse} low RPE + low response',
+                  '${data.summary.lowRpeLowSlopeResponse} low/moderate RPE + lower-than-expected',
                 ),
               ],
             ),
@@ -96,18 +96,18 @@ class RpeSlopeQuadrantChart extends StatelessWidget {
                   _LineLegendItem(label: 'Expected slope response = 1.0'),
                   _ZoneLegendItem(
                     color: AppColors.warning,
-                    label: 'Low',
-                    detail: 'below expected response',
+                    label: 'Lower-than-expected',
+                    detail: 'recovery response below reference',
                   ),
                   _ZoneLegendItem(
                     color: AppColors.primary,
-                    label: 'Normal',
-                    detail: 'expected response',
+                    label: 'Expected',
+                    detail: 'recovery response within reference',
                   ),
                   _ZoneLegendItem(
                     color: AppColors.success,
                     label: 'Favorable',
-                    detail: 'above favorable response',
+                    detail: 'recovery response above favorable threshold',
                   ),
                   _ZoneLegendItem(
                     color: AppColors.textHint,
@@ -292,7 +292,7 @@ class RpeSlopeQuadrantChart extends StatelessWidget {
       'RPE: ${_fixed(point.rpe, 1)}',
       'Slope: ${_fixed(point.observedSlope, 3)}',
       'Response index: ${_fixed(point.slopeResponseIndex, 2)}',
-      'Zone: ${point.recoveryZone.label}',
+      'Response: ${point.recoveryZone.label}',
       _intensityLine(point),
     ].join('\n');
   }

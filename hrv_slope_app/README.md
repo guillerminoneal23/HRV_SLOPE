@@ -1,7 +1,7 @@
 # HRV Slope App
 
 HRV Slope App is a local/offline Flutter application for Windows and iOS. It
-supports internal training load monitoring using RMSSD-Slope analysis from
+supports post-effort recovery-response monitoring using RMSSD-Slope analysis from
 direct RMSSD values or advanced RR interval workflows.
 
 This tool supports training analysis. It is not a medical diagnostic tool.
@@ -9,7 +9,7 @@ This tool supports training analysis. It is not a medical diagnostic tool.
 ## Current Status
 
 - Phase 5.1 release readiness pass complete.
-- Latest gate: 417/417 tests passing.
+- Latest gate: 428/428 tests passing.
 - Database schema version: 4.
 - Direct RMSSD input remains the recommended/default workflow.
 - RR interval input is available as an advanced workflow.
@@ -17,6 +17,8 @@ This tool supports training analysis. It is not a medical diagnostic tool.
 - HRV slope interpretation uses valid external intensity first; when external
   intensity is absent or invalid, internal intensity such as RPE or subjective
   fatigue can be used as a fallback.
+- Interpretation language focuses on post-effort recovery response rather than
+  judging high RPE or fatigue alone.
 - Reusable local tag catalog is available for session task, sport, protocol
   name, and context/environment.
 
@@ -29,6 +31,7 @@ Implemented:
 - CSV import
 - individual report
 - group report
+- group report supports athlete/session/recovery-response filters
 - population nomogram
 - athlete longitudinal dashboard with comparable-session filters
 - longitudinal Slope/ITL trends use `slope_Orellana_19` zone coloring when
@@ -127,7 +130,8 @@ Important guardrails:
 - Interpreted slope is clamped to a minimum of 0.1 for graphical and
   interpretive use.
 - ITL index is `1 / interpreted_slope`.
-- No nomogram classification is produced without `intensity_percent`.
+- No nomogram recovery-response interpretation is produced without
+  `intensity_percent`.
 - `intensity_percent` is resolved from external intensity first. If no valid
   external intensity is available, RPE or subjective fatigue on a 0-10 scale can
   be converted to 0-100 for slope interpretation.

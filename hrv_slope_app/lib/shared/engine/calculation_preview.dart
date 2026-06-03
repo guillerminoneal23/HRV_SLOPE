@@ -251,7 +251,9 @@ CalculationPreview buildCalculationPreview({
     residualPercent = classResult.residualPercent;
     warnings.addAll(classResult.warnings);
   } else {
-    warnings.add('Intensity percent is required for nomogram classification.');
+    warnings.add(
+      'Intensity percent is required for recovery-response interpretation.',
+    );
   }
 
   // Add intensity resolution warnings

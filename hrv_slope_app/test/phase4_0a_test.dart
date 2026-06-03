@@ -11,6 +11,7 @@ import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/shared/engine/statistics.dart';
 import 'package:hrv_slope_app/ui/screens/athletes/athlete_detail_screen.dart';
 import 'package:hrv_slope_app/ui/screens/longitudinal/athlete_longitudinal_screen.dart';
@@ -1025,8 +1026,8 @@ void main() {
       expect(find.text('High RPE threshold: 7.0'), findsOneWidget);
       expect(find.text('RPE threshold'), findsOneWidget);
       expect(find.text('Expected slope response = 1.0'), findsOneWidget);
-      expect(find.textContaining('Low:'), findsOneWidget);
-      expect(find.textContaining('Normal:'), findsOneWidget);
+      expect(find.textContaining('Lower-than-expected:'), findsOneWidget);
+      expect(find.textContaining('Expected:'), findsOneWidget);
       expect(find.textContaining('Favorable:'), findsOneWidget);
       expect(find.textContaining('Unavailable:'), findsOneWidget);
 
@@ -1045,7 +1046,7 @@ void main() {
       expect(tooltip.text, contains('RPE: 6.0'));
       expect(tooltip.text, contains('Slope: 0.800'));
       expect(tooltip.text, contains('Response index: 0.36'));
-      expect(tooltip.text, contains('Zone: Low'));
+      expect(tooltip.text, contains('Response: Lower-than-expected'));
       expect(tooltip.text, contains('Intensity: 60.0%'));
       expect(tooltip.text, isNot(contains('Notes should not appear')));
       expect(tooltip.text, isNot(contains('threshold')));
@@ -1166,7 +1167,10 @@ void main() {
       expect(slopeChart.points.first.tooltip, contains('2026-05-01'));
       expect(slopeChart.points.first.tooltip, contains('Session 1'));
       expect(slopeChart.points.first.tooltip, contains('Slope:'));
-      expect(slopeChart.points.first.tooltip, contains('Zone: Low'));
+      expect(
+        slopeChart.points.first.tooltip,
+        contains('Zone: Lower-than-expected'),
+      );
       expect(slopeChart.points.first.tooltip, contains('Intensity:'));
       expect(
         slopeChart.points.first.tooltip,
@@ -1182,13 +1186,9 @@ void main() {
       expect(lineChart.data.lineBarsData, hasLength(1));
       expect(lineChart.data.lineBarsData.single.color, AppColors.primary);
       expect(lineChart.data.maxY, lessThan(2));
-      expect(find.text('Low: below expected response'), findsOneWidget);
-      expect(find.text('Normal: expected response'), findsOneWidget);
-      expect(find.text('Favorable: above favorable response'), findsOneWidget);
-      expect(
-        find.text('Unavailable: reference cannot be calculated'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Lower-than-expected:'), findsOneWidget);
+      expect(find.textContaining('Expected:'), findsOneWidget);
+      expect(find.textContaining('Favorable:'), findsOneWidget);
       await _dragUntilVisible(
         tester,
         find.textContaining(
@@ -1357,8 +1357,83 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.textContaining('Low, Normal, Favorable, or Unavailable'),
+        find.textContaining(
+          'Lower-than-expected, Expected, Favorable, or Unavailable',
+        ),
         findsWidgets,
+      );
+    });
+
+    test('recovery response labels map zones and legacy classes', () {
+      expect(
+        recoveryZoneLabel(LongitudinalRecoveryZone.low.key),
+        'Lower-than-expected recovery response',
+      );
+      expect(
+        recoveryZoneLabel(LongitudinalRecoveryZone.normal.key),
+        'Expected recovery response',
+      );
+      expect(
+        recoveryZoneLabel(LongitudinalRecoveryZone.favorable.key),
+        'Favorable recovery response',
+      );
+      expect(
+        recoveryZoneLabel(LongitudinalRecoveryZone.unavailable.key),
+        'Recovery reference unavailable',
+      );
+      expect(
+        recoveryResponseLabelForClassificationKey(
+          'high_or_moderate_internal_load',
+        ),
+        'Lower-than-expected recovery response',
+      );
+      expect(
+        recoveryResponseLabelForClassificationKey(
+          'low_internal_load_or_fast_recovery',
+        ),
+        'Favorable recovery response',
+      );
+    });
+
+    test('quadrant interpretations use post-effort recovery language', () {
+      expect(
+        RpeSlopeQuadrant.highRpeFavorableSlopeResponse.interpretation,
+        contains('demanding'),
+      );
+      expect(
+        RpeSlopeQuadrant.highRpeFavorableSlopeResponse.interpretation,
+        contains('adequate or favorable'),
+      );
+      expect(
+        RpeSlopeQuadrant.highRpeLowSlopeResponse.interpretation,
+        contains('lower than expected'),
+      );
+      expect(
+        RpeSlopeQuadrant.lowRpeFavorableSlopeResponse.interpretation,
+        contains('lower perceived effort'),
+      );
+      expect(
+        RpeSlopeQuadrant.lowRpeLowSlopeResponse.interpretation,
+        contains('sleep, stress, heat, humidity, travel'),
+      );
+    });
+
+    test('intensity source messages avoid judging internal load alone', () {
+      expect(
+        intensitySourceForSlopeMessage('External'),
+        contains('External intensity was used'),
+      );
+      expect(
+        intensitySourceForSlopeMessage('Internal'),
+        contains('because no valid external intensity was available'),
+      );
+      expect(
+        intensitySourceForSlopeMessage('Unknown'),
+        contains('recovery interpretation may be limited'),
+      );
+      expect(
+        intensitySourceForSlopeMessage('Internal').toLowerCase(),
+        isNot(contains('internal load is high')),
       );
     });
 

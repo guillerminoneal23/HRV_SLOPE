@@ -298,7 +298,7 @@ void main() {
       expect(r.rows.first.warnings.any((w) => w.contains('external')), isTrue);
     });
 
-    test('warns when no internal load variable', () {
+    test('warns when no internal intensity variable', () {
       const csv =
           'athlete_name,date,rmssd_recovery,speed_kmh\nJohn,2024-01-15,25.5,14.0\n';
       final r = parseCsvImport(csv);

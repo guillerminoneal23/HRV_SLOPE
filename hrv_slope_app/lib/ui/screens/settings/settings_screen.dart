@@ -70,7 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Active in calculation preview and session classification.',
+                  'Active in calculation preview and recovery-response interpretation.',
                   style: TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,

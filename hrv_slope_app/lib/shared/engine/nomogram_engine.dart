@@ -63,7 +63,7 @@ extension PopulationNomogramSourceName on PopulationNomogramSource {
   }
 }
 
-/// Internal-load interpretation against the expected lower/mean/upper bands.
+/// Recovery-response interpretation against the expected lower/mean/upper bands.
 enum InternalLoadClassification {
   veryHighInternalLoad,
   highOrModerateInternalLoad,
@@ -75,26 +75,26 @@ extension InternalLoadClassificationText on InternalLoadClassification {
   String get label {
     switch (this) {
       case InternalLoadClassification.veryHighInternalLoad:
-        return 'Very high internal load';
+        return 'Lower-than-expected recovery response';
       case InternalLoadClassification.highOrModerateInternalLoad:
-        return 'High or moderate internal load';
+        return 'Lower-than-expected recovery response';
       case InternalLoadClassification.expectedResponse:
-        return 'Expected response';
+        return 'Expected recovery response';
       case InternalLoadClassification.lowInternalLoadOrFastRecovery:
-        return 'Low internal load or fast recovery';
+        return 'Favorable recovery response';
     }
   }
 
   String get meaning {
     switch (this) {
       case InternalLoadClassification.veryHighInternalLoad:
-        return 'Lower than expected recovery for this intensity';
+        return 'Observed slope is below the expected recovery-response range for this intensity';
       case InternalLoadClassification.highOrModerateInternalLoad:
-        return 'Slower than average recovery for this intensity';
+        return 'Observed slope is below the expected mean for this intensity';
       case InternalLoadClassification.expectedResponse:
-        return 'Within expected range for this intensity';
+        return 'Observed slope is within the expected recovery-response range for this intensity';
       case InternalLoadClassification.lowInternalLoadOrFastRecovery:
-        return 'Faster than expected recovery for this intensity';
+        return 'Observed slope is above the favorable recovery-response threshold for this intensity';
     }
   }
 }
@@ -106,11 +106,11 @@ extension SlopeClassificationLabel on SlopeClassification {
   String get label {
     switch (this) {
       case SlopeClassification.poor:
-        return 'Poor recovery (high internal load)';
+        return 'Lower-than-expected recovery response';
       case SlopeClassification.good:
-        return 'Acceptable recovery';
+        return 'Expected recovery response';
       case SlopeClassification.veryGood:
-        return 'Excellent recovery (low internal load)';
+        return 'Favorable recovery response';
     }
   }
 

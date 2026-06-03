@@ -9,6 +9,7 @@ import 'package:hrv_slope_app/shared/engine/individual_nomogram_builder.dart';
 import 'package:hrv_slope_app/shared/engine/individual_report_builder.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 
 String csvField(Object? value) {
   if (value == null) return '';
@@ -129,8 +130,8 @@ CsvExportData exportIndividualReportCsv(
       slope.interpretedSlope,
       slope.itlIndex,
       nomogram == null
-          ? data.classification
-          : _classificationKey(nomogram.classification),
+          ? recoveryResponseExportValueForClassificationKey(data.classification)
+          : nomogram.classification.label,
       nomogram?.interpretationText,
       nomogram?.presetName,
       nomogram?.expectedLower,
@@ -165,6 +166,7 @@ CsvExportData exportIndividualReportCsv(
 
 CsvExportData exportGroupReportRowsCsv(GroupReportData data) {
   const headers = [
+    'filter_summary',
     'rank',
     'athlete_id',
     'athlete_name',
@@ -193,13 +195,14 @@ CsvExportData exportGroupReportRowsCsv(GroupReportData data) {
   final rows = [
     for (final row in data.rows)
       [
+        data.activeFilterLabels.join(' | '),
         if (row.isRanked) ++rank else null,
         row.athleteId,
         row.athleteName,
         row.sessionId,
         row.sessionDate,
         row.taskName,
-        data.sessionType,
+        row.sessionType,
         row.intensityPercent,
         row.intensitySourceForSlope,
         row.intensityPercent,
@@ -209,7 +212,7 @@ CsvExportData exportGroupReportRowsCsv(GroupReportData data) {
         row.rawSlope,
         row.interpretedSlope,
         row.itlIndex,
-        row.classification,
+        recoveryResponseExportValueForClassificationKey(row.classification),
         row.residual,
         row.residualPercent,
         _variablesJson(row.externalVariables),
@@ -230,6 +233,7 @@ CsvExportData exportGroupReportRowsCsv(GroupReportData data) {
 
 CsvExportData exportGroupReportSummaryCsv(GroupReportData data) {
   const headers = [
+    'filter_summary',
     'n_sessions',
     'n_athletes',
     'n_complete',
@@ -238,13 +242,13 @@ CsvExportData exportGroupReportSummaryCsv(GroupReportData data) {
     'min_slope',
     'max_slope',
     'mean_itl',
-    'n_very_high_internal_load',
-    'n_high_or_moderate_internal_load',
-    'n_expected_response',
-    'n_low_internal_load_or_fast_recovery',
+    'n_lower_than_expected_recovery_response',
+    'n_expected_recovery_response',
+    'n_favorable_recovery_response',
   ];
   final rows = [
     [
+      data.activeFilterLabels.join(' | '),
       data.summary.nSessions,
       data.summary.nAthletes,
       data.summary.nComplete,
@@ -253,12 +257,12 @@ CsvExportData exportGroupReportSummaryCsv(GroupReportData data) {
       data.summary.minSlope,
       data.summary.maxSlope,
       data.summary.meanItl,
-      data.summary.nVeryHighInternalLoad,
-      data.rows
-          .where(
-            (row) => row.classification == 'high_or_moderate_internal_load',
-          )
-          .length,
+      data.summary.nVeryHighInternalLoad +
+          data.rows
+              .where(
+                (row) => row.classification == 'high_or_moderate_internal_load',
+              )
+              .length,
       data.summary.nExpectedResponse,
       data.summary.nLowInternalLoadOrFastRecovery,
     ],
@@ -357,7 +361,9 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
         series.points[i].itlIndex,
         series.points[i].residual,
         series.points[i].residualPercent,
-        series.points[i].classification,
+        recoveryResponseExportValueForClassificationKey(
+          series.points[i].classification,
+        ),
         series.points[i].nomogramReference.source,
         series.points[i].nomogramReference.referenceSlope,
         series.points[i].nomogramReference.lowerSlopeThreshold,
@@ -466,7 +472,7 @@ CsvExportData exportIndividualNomogramValidPointsCsv(
         point.taskName,
         point.intensityPercent,
         point.interpretedSlope,
-        point.classification,
+        recoveryResponseExportValueForClassificationKey(point.classification),
         point.residualPopulation,
         point.residualIndividual,
         point.residualHybrid,
@@ -642,19 +648,6 @@ String _filename(String prefix, String label) {
       .replaceAll(RegExp(r'[^a-z0-9_ -]'), '')
       .replaceAll(RegExp(r'\s+'), '_');
   return '${prefix}_${normalized.isEmpty ? 'export' : normalized}_$date.csv';
-}
-
-String _classificationKey(InternalLoadClassification classification) {
-  switch (classification) {
-    case InternalLoadClassification.veryHighInternalLoad:
-      return 'very_high_internal_load';
-    case InternalLoadClassification.highOrModerateInternalLoad:
-      return 'high_or_moderate_internal_load';
-    case InternalLoadClassification.expectedResponse:
-      return 'expected_response';
-    case InternalLoadClassification.lowInternalLoadOrFastRecovery:
-      return 'low_internal_load_or_fast_recovery';
-  }
 }
 
 String _thresholdForFlag(String ruleName) {

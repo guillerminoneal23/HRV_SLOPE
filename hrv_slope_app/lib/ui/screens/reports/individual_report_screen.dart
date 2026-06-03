@@ -369,7 +369,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
           _row('Expected mean', n.expectedMean.toStringAsFixed(3)),
           _row('Expected upper', n.expectedUpper.toStringAsFixed(3)),
           _row('Observed slope', n.observedSlope.toStringAsFixed(3)),
-          _row('Classification', n.classificationLabel),
+          _row('Response', n.classificationLabel),
           if (n.warnings.isNotEmpty)
             for (final w in n.warnings)
               Padding(
@@ -599,10 +599,10 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         content: const Text(
           'This report uses the RMSSD-Slope method (Naranjo Orellana et al., '
           '2019) to evaluate autonomic recovery from exercise.\n\n'
-          'Classification is based on comparison to population reference bands. '
+          'Recovery response is based on comparison to population reference bands. '
           'Results should be interpreted in context of the athlete\'s training '
-          'history, health status, and external factors.\n\n'
-          'This tool provides training-load insights and is not a medical '
+          'history and external factors.\n\n'
+          'This tool provides training insights and is not a medical '
           'diagnostic instrument.',
         ),
         actions: [

@@ -243,7 +243,7 @@ void main() {
     test('classification text maps correctly', () {
       expect(
         interpretationTextFor(InternalLoadClassification.veryHighInternalLoad),
-        contains('slower than expected'),
+        contains('lower than expected'),
       );
       expect(
         interpretationTextFor(
@@ -259,7 +259,7 @@ void main() {
         interpretationTextFor(
           InternalLoadClassification.lowInternalLoadOrFastRecovery,
         ),
-        contains('faster than'),
+        contains('favorable'),
       );
     });
 
@@ -417,7 +417,7 @@ void main() {
       expect(bands.warnings.first, contains('extrapolated'));
     });
 
-    test('classify at 80% with slope 2.1 = low internal load', () {
+    test('classify at 80% with slope 2.1 = favorable response', () {
       final result = classifySlopeWithPopulationNomogram(
         80.0,
         2.1,
@@ -463,18 +463,18 @@ void main() {
       }
     });
 
-    test('uses neutral training-load language', () {
+    test('uses recovery-response language', () {
       for (final c in InternalLoadClassification.values) {
         final text = interpretationTextFor(c);
-        // Each interpretation should reference recovery or internal load
+        // Each interpretation should reference recovery/post-effort response.
         expect(
           text.contains('Recovery') ||
-              text.contains('Internal load') ||
               text.contains('recovery') ||
-              text.contains('internal load'),
+              text.contains('post-effort response'),
           isTrue,
-          reason: 'Text for $c should use training-load language: $text',
+          reason: 'Text for $c should use recovery-response language: $text',
         );
+        expect(text.toLowerCase(), isNot(contains('internal load')));
       }
     });
   });

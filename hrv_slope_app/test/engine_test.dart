@@ -325,7 +325,7 @@ void main() {
   });
 
   group('population nomogram classification', () {
-    test('observed below lower -> very high internal load', () {
+    test('observed below lower -> lower-than-expected response', () {
       final result = classifySlopeWithPopulationNomogram(60, 0.50);
       expect(
         result.classification,
@@ -333,16 +333,13 @@ void main() {
       );
     });
 
-    test(
-      'observed between lower and mean -> high or moderate internal load',
-      () {
-        final result = classifySlopeWithPopulationNomogram(80, 0.20);
-        expect(
-          result.classification,
-          equals(InternalLoadClassification.highOrModerateInternalLoad),
-        );
-      },
-    );
+    test('observed between lower and mean -> lower-than-expected response', () {
+      final result = classifySlopeWithPopulationNomogram(80, 0.20);
+      expect(
+        result.classification,
+        equals(InternalLoadClassification.highOrModerateInternalLoad),
+      );
+    });
 
     test('observed between mean and upper -> expected response', () {
       final result = classifySlopeWithPopulationNomogram(80, 0.50);
@@ -352,7 +349,7 @@ void main() {
       );
     });
 
-    test('observed above upper -> low internal load or fast recovery', () {
+    test('observed above upper -> favorable response', () {
       final result = classifySlopeWithPopulationNomogram(80, 1.0);
       expect(
         result.classification,

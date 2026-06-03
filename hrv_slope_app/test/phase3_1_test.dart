@@ -80,6 +80,106 @@ void main() {
       expect(report.rows.single.externalVariables.single.name, 'speed_kmh');
       expect(report.rows.single.internalVariables.single.name, 'rpe_1_10');
     });
+
+    test('filters by date athlete sport task type protocol and context', () {
+      final report = buildGroupReport(
+        details: [
+          _detail(
+            id: 1,
+            athleteId: 1,
+            athleteName: 'Runner A',
+            sport: 'Running',
+            date: '2026-05-01',
+            taskName: 'RSA',
+            sessionType: 'HIIT',
+            protocolName: '5-10',
+            contextEnvironment: 'Indoor; high humidity',
+          ),
+          _detail(
+            id: 2,
+            athleteId: 2,
+            athleteName: 'Runner B',
+            sport: 'Cycling',
+            date: '2026-05-03',
+            taskName: 'Tempo',
+            sessionType: 'Training',
+            protocolName: '10-15',
+            contextEnvironment: 'Outdoor | heat',
+          ),
+        ],
+        nomogramPreset: PopulationNomogramSource.excelOperational,
+        filter: const GroupReportFilter(
+          dateFrom: '2026-05-01',
+          dateTo: '2026-05-02',
+          athleteNames: {'Runner A'},
+          sports: {'Running'},
+          sessionTasks: {'RSA'},
+          sessionTypes: {'HIIT'},
+          protocolNames: {'5-10'},
+          contextEnvironmentTags: {'high humidity'},
+        ),
+      );
+
+      expect(report.rows.map((row) => row.athleteName), ['Runner A']);
+      expect(report.activeFilterLabels, contains('Athlete: Runner A'));
+      expect(report.filterOptions.contextEnvironmentTags, contains('Indoor'));
+      expect(
+        report.filterOptions.contextEnvironmentTags,
+        contains('high humidity'),
+      );
+    });
+
+    test(
+      'advanced filters include intensity RPE fatigue slope ITL response notes',
+      () {
+        final report = buildGroupReport(
+          details: [
+            _detail(
+              id: 1,
+              athleteId: 1,
+              athleteName: 'Runner A',
+              intensity: 80,
+              slope: 1.0,
+              rpe: 6,
+              fatigue: 3,
+              notes: 'slept well',
+            ),
+            _detail(
+              id: 2,
+              athleteId: 2,
+              athleteName: 'Runner B',
+              intensity: 60,
+              slope: 0.1,
+              rpe: 9,
+              fatigue: 8,
+              notes: 'travel day',
+            ),
+          ],
+          nomogramPreset: PopulationNomogramSource.excelOperational,
+          filter: const GroupReportFilter(
+            intensitySourcesForSlope: {'External'},
+            intensityMetricNames: {'direct_percent_mas'},
+            primaryIntensityMin: 70,
+            primaryIntensityMax: 90,
+            rpeMin: 5,
+            rpeMax: 7,
+            fatigueMin: 1,
+            fatigueMax: 4,
+            slopeMin: 0.8,
+            slopeMax: 1.2,
+            itlMin: 0.8,
+            itlMax: 1.2,
+            recoveryResponses: {'Favorable'},
+            notesTextSearch: 'slept',
+          ),
+        );
+
+        expect(report.rows.map((row) => row.athleteName), ['Runner A']);
+        expect(report.rows.single.rpe, 6);
+        expect(report.rows.single.fatigue, 3);
+        expect(report.activeFilterLabels, contains('Response: Favorable'));
+      },
+    );
   });
 
   group('Group report screen', () {
@@ -102,7 +202,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.text('Sessions: 2'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Sessions: 2'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Runner A'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Runner A'), findsOneWidget);
       await tester.scrollUntilVisible(
         find.text('Runner B'),
@@ -118,10 +228,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.textContaining('No sessions match'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.textContaining('No sessions match'), findsOneWidget);
     });
 
-    testWidgets('shows very_high_internal_load label', (tester) async {
+    testWidgets('shows lower-than-expected recovery response label', (
+      tester,
+    ) async {
       await _seedSession(
         db,
         athleteName: 'Loaded Athlete',
@@ -134,7 +251,179 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Very high internal load'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Lower-than-expected recovery response'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(
+        find.text('Lower-than-expected recovery response'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('date picker opens and invalid date range is controlled', (
+      tester,
+    ) async {
+      await _seedSession(db, athleteName: 'Runner A', slope: 0.5);
+
+      await tester.pumpWidget(
+        MaterialApp(home: GroupReportScreen(database: db)),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Pick date').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(CalendarDatePicker), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'From date'),
+        '2026-05-30',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'To date'),
+        '2026-05-01',
+      );
+      await tester.tap(find.text('Apply filters').first);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('From date must be on or before To date.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('categorical filters are compact multiselect dropdowns', (
+      tester,
+    ) async {
+      await _seedSession(
+        db,
+        athleteName: 'Runner A',
+        sport: 'Running',
+        taskName: 'RSA',
+        sessionType: 'HIIT',
+        slope: 0.4,
+      );
+      await _seedSession(
+        db,
+        athleteName: 'Runner B',
+        sport: 'Cycling',
+        taskName: 'Tempo',
+        sessionType: 'Training',
+        slope: 0.8,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: GroupReportScreen(database: db)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(_filterSummaryKey('Athlete')), findsOneWidget);
+      expect(_filterSummary(tester, 'Athlete'), 'Any');
+      expect(_filterSummary(tester, 'Session task/name'), 'Any');
+      expect(find.widgetWithText(CheckboxListTile, 'RSA'), findsNothing);
+
+      await tester.tap(find.text('Session task/name'));
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(CheckboxListTile, 'RSA'), findsOneWidget);
+      expect(find.widgetWithText(CheckboxListTile, 'Tempo'), findsOneWidget);
+
+      await _tapVisible(tester, find.widgetWithText(CheckboxListTile, 'RSA'));
+      expect(_filterSummary(tester, 'Session task/name'), 'RSA');
+
+      await _tapVisible(tester, find.widgetWithText(CheckboxListTile, 'RSA'));
+      expect(_filterSummary(tester, 'Session task/name'), 'Any');
+
+      await _tapVisible(tester, find.widgetWithText(CheckboxListTile, 'RSA'));
+      expect(_filterSummary(tester, 'Session task/name'), 'RSA');
+
+      await _tapVisible(tester, find.widgetWithText(CheckboxListTile, 'Tempo'));
+      expect(_filterSummary(tester, 'Session task/name'), '2 selected');
+    });
+
+    testWidgets('applies and clears athlete sport task filters', (
+      tester,
+    ) async {
+      await _seedSession(
+        db,
+        athleteName: 'Runner A',
+        sport: 'Running',
+        taskName: 'RSA',
+        sessionType: 'HIIT',
+        slope: 0.4,
+      );
+      await _seedSession(
+        db,
+        athleteName: 'Runner B',
+        sport: 'Cycling',
+        taskName: 'Tempo',
+        sessionType: 'Training',
+        slope: 0.8,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: GroupReportScreen(database: db)),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Athlete'));
+      await tester.pumpAndSettle();
+      await _tapVisible(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Runner A'),
+      );
+      expect(_filterSummary(tester, 'Athlete'), 'Runner A');
+
+      await _tapVisible(tester, find.text('Sport'));
+      await _tapVisible(
+        tester,
+        find.widgetWithText(CheckboxListTile, 'Running'),
+      );
+      await tester.pumpAndSettle();
+      expect(_filterSummary(tester, 'Sport'), 'Running');
+
+      await _tapVisible(tester, find.text('Apply filters').first);
+
+      await tester.scrollUntilVisible(
+        find.text('Sessions: 1'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Sessions: 1'), findsOneWidget);
+      expect(find.text('Runner A'), findsWidgets);
+      expect(find.text('Athlete: Runner A'), findsOneWidget);
+
+      await _tapVisible(tester, find.text('Clear filters').first);
+      await tester.ensureVisible(find.byKey(_filterSummaryKey('Athlete')));
+      await tester.pumpAndSettle();
+      expect(_filterSummary(tester, 'Athlete'), 'Any');
+      expect(_filterSummary(tester, 'Sport'), 'Any');
+      await tester.scrollUntilVisible(
+        find.text('Runner B'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Runner B'), findsOneWidget);
+    });
+
+    testWidgets('advanced filters remain collapsed and usable', (tester) async {
+      await _seedSession(db, athleteName: 'Runner A', slope: 0.5);
+
+      await tester.pumpWidget(
+        MaterialApp(home: GroupReportScreen(database: db)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Advanced filters'), findsOneWidget);
+      expect(find.text('Intensity source for slope'), findsNothing);
+
+      await _tapVisible(tester, find.text('Advanced filters'));
+
+      expect(find.text('Intensity source for slope'), findsOneWidget);
+      expect(find.widgetWithText(FilterChip, 'External'), findsOneWidget);
     });
 
     test('does not use medical diagnostic language', () {
@@ -347,15 +636,24 @@ SessionDetail _detail({
   required int id,
   required int athleteId,
   String athleteName = 'Athlete',
+  String sport = 'Running',
+  String date = '2026-05-26',
+  String taskName = 'Tempo',
+  String sessionType = 'training',
+  String? protocolName,
+  String? contextEnvironment,
   double? intensity = 80,
   double? slope = 0.5,
+  double rpe = 7,
+  double? fatigue,
+  String? notes,
   bool isDraft = false,
 }) {
   return SessionDetail(
     athlete: Athlete(
       id: athleteId,
       name: athleteName,
-      sport: 'Running',
+      sport: sport,
       birthDate: null,
       gender: null,
       positionOrEvent: null,
@@ -371,12 +669,12 @@ SessionDetail _detail({
     session: Session(
       id: id,
       athleteId: athleteId,
-      date: '2026-05-26',
-      taskName: 'Tempo',
-      sport: 'Running',
-      sessionType: 'training',
-      protocolName: null,
-      contextEnvironment: null,
+      date: date,
+      taskName: taskName,
+      sport: sport,
+      sessionType: sessionType,
+      protocolName: protocolName,
+      contextEnvironment: contextEnvironment,
       isDraft: isDraft,
       intensityPercent: intensity,
       intensitySource: intensity == null ? null : 'direct_percent_mas',
@@ -406,7 +704,7 @@ SessionDetail _detail({
       rrQualityNotesJson: null,
       rrRmssdDeltaPercent: null,
       importBatchId: null,
-      notes: null,
+      notes: notes,
       createdAt: '2026-05-26T00:00:00',
     ),
     variables: [
@@ -423,8 +721,16 @@ SessionDetail _detail({
         sessionId: id,
         category: 'internal',
         name: 'rpe_1_10',
-        value: 7,
+        value: rpe,
       ),
+      if (fatigue != null)
+        _variable(
+          id: id * 10 + 2,
+          sessionId: id,
+          category: 'internal',
+          name: 'subjective_fatigue_1_10',
+          value: fatigue,
+        ),
     ],
     hrvMeasurements: const [],
     notes: const [],
@@ -453,9 +759,28 @@ IntensityVariable _variable({
   );
 }
 
+Key _filterSummaryKey(String label) {
+  return Key('group-report-filter-$label-summary');
+}
+
+String? _filterSummary(WidgetTester tester, String label) {
+  final widget = tester.widget<Text>(find.byKey(_filterSummaryKey(label)));
+  return widget.data;
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
 Future<int> _seedSession(
   AppDatabase db, {
   required String athleteName,
+  String sport = 'Running',
+  String taskName = 'Tempo',
+  String sessionType = 'training',
   double intensity = 80,
   double slope = 0.5,
 }) async {
@@ -463,7 +788,7 @@ Future<int> _seedSession(
   final athleteId = await db.athletesDao.insertAthlete(
     AthletesCompanion.insert(
       name: athleteName,
-      sport: const drift.Value('Running'),
+      sport: drift.Value(sport),
       masKmh: const drift.Value(20),
       createdAt: now,
       updatedAt: now,
@@ -473,9 +798,9 @@ Future<int> _seedSession(
     SessionsCompanion.insert(
       athleteId: athleteId,
       date: '2026-05-26',
-      taskName: const drift.Value('Tempo'),
-      sport: const drift.Value('Running'),
-      sessionType: const drift.Value('training'),
+      taskName: drift.Value(taskName),
+      sport: drift.Value(sport),
+      sessionType: drift.Value(sessionType),
       intensityPercent: drift.Value(intensity),
       intensitySource: const drift.Value('direct_percent_mas'),
       recoveryTimeMin: const drift.Value(10),

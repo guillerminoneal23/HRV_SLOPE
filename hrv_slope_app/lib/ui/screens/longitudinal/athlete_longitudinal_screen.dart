@@ -6,6 +6,7 @@ import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
+import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/screens/nomogram/individual_nomogram_screen.dart';
 import 'package:hrv_slope_app/ui/screens/reports/individual_report_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
@@ -87,7 +88,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   static const _itlReferenceHelp =
       'Reference ITL is derived as 1 / reference slope. Lower ITL generally reflects a more favorable response.';
   static const _referenceZonesHelp =
-      "Zones compare observed slope with the slope_Orellana_19 reference for that session's intensity: Low, Normal, Favorable, or Unavailable.";
+      "Zones compare observed slope with the slope_Orellana_19 reference for that session's intensity: Lower-than-expected, Expected, Favorable, or Unavailable.";
 
   LongitudinalSeries? _series;
   Athlete? _athlete;
@@ -552,7 +553,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
           _filterSection(
             title: 'Intensity used for slope',
             help:
-                'External load is used when available. If it is missing, internal load such as RPE or subjective fatigue can be used for slope interpretation.',
+                'External intensity is used when available. If it is missing, internal intensity such as RPE or subjective fatigue can be used for slope interpretation.',
             children: [
               _filterGroup(
                 'Source used for slope',
@@ -785,7 +786,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
           children: [
             _metric('Latest slope', _fixed(s.latestSlope, 3)),
             _metric('Latest ITL', _fixed(s.latestItl, 3)),
-            _metric('Latest class', _classLabel(s.latestClassification)),
+            _metric('Latest response', _classLabel(s.latestClassification)),
             _metric('Mean slope', _fixed(s.meanSlope, 3)),
             _metric('Trend', _trendLabel(s.trendDirection)),
             _metric('Active flags', '${series.fatigueFlags.length}'),
@@ -823,9 +824,9 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               'Missing reference intensity',
               '${c.missingReferencePrimaryIntensity}',
             ),
-            _metric('Zone Low', '${c.referenceZoneLow}'),
-            _metric('Zone Normal', '${c.referenceZoneNormal}'),
-            _metric('Zone Favorable', '${c.referenceZoneFavorable}'),
+            _metric('Lower-than-expected', '${c.referenceZoneLow}'),
+            _metric('Expected', '${c.referenceZoneNormal}'),
+            _metric('Favorable', '${c.referenceZoneFavorable}'),
             _metric('Missing key data', '${c.missingKeyData}'),
           ],
         ),
@@ -922,15 +923,15 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         children: const [
           _ZoneLegendItem(
             color: AppColors.warning,
-            label: 'Low: below expected response',
+            label: 'Lower-than-expected: recovery response below reference',
           ),
           _ZoneLegendItem(
             color: AppColors.primary,
-            label: 'Normal: expected response',
+            label: 'Expected: recovery response within reference',
           ),
           _ZoneLegendItem(
             color: AppColors.success,
-            label: 'Favorable: above favorable response',
+            label: 'Favorable: recovery response above favorable threshold',
           ),
           _ZoneLegendItem(
             color: AppColors.textHint,
@@ -1197,6 +1198,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         Text(
           'Source ${longitudinalIntensitySourceLabel(point.intensitySourceForSlope)}',
         ),
+        Text(intensitySourceForSlopeMessage(point.intensitySourceForSlope)),
         Text(
           'Metric ${point.primaryIntensityMetric == null ? '-' : longitudinalIntensityMetricLabel(point.primaryIntensityMetric!)}',
         ),
@@ -1460,18 +1462,7 @@ String _trendLabel(LongitudinalTrendDirection direction) {
 }
 
 String _classLabel(String? value) {
-  switch (value) {
-    case 'very_high_internal_load':
-      return 'Very high internal load';
-    case 'high_or_moderate_internal_load':
-      return 'High/moderate internal load';
-    case 'expected_response':
-      return 'Expected response';
-    case 'low_internal_load_or_fast_recovery':
-      return 'Low internal load / fast recovery';
-    default:
-      return value ?? '-';
-  }
+  return recoveryResponseLabelForClassificationKey(value);
 }
 
 Color longitudinalRecoveryZoneColor(LongitudinalRecoveryZone zone) {

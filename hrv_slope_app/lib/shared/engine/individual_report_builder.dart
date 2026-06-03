@@ -166,21 +166,20 @@ class IndividualReportData {
 // Interpretation text mapping
 // ---------------------------------------------------------------------------
 
-/// Returns neutral, training-load-focused interpretation text.
+/// Returns neutral recovery-response interpretation text.
 String interpretationTextFor(InternalLoadClassification c) {
   switch (c) {
     case InternalLoadClassification.veryHighInternalLoad:
-      return 'Recovery was slower than expected for this intensity. '
-          'Internal load appears high relative to the recorded intensity.';
+      return 'The post-effort response was lower than expected for this intensity. '
+          'Review recent load, context, and recovery conditions.';
     case InternalLoadClassification.highOrModerateInternalLoad:
-      return 'Recovery was below the expected mean for this intensity. '
-          'Monitor context, accumulated fatigue, and recent load.';
+      return 'The post-effort response was below the expected mean for this intensity. '
+          'Review context, accumulated fatigue, and recent load.';
     case InternalLoadClassification.expectedResponse:
-      return 'Recovery is within the expected population band for this '
+      return 'The post-effort response is within the expected recovery-response band for this '
           'intensity.';
     case InternalLoadClassification.lowInternalLoadOrFastRecovery:
-      return 'Recovery was faster than the expected upper band for this '
-          'intensity. Internal load appears low relative to the recorded '
+      return 'The post-effort response was favorable compared with the expected upper band for this '
           'intensity.';
   }
 }
@@ -206,11 +205,13 @@ IndividualReportData buildIndividualReport({
   if (session.isDraft) warnings.add('Session is a draft — results incomplete.');
   if (session.intensityPercent == null) {
     warnings.add(
-      'Intensity percent is missing. Nomogram classification unavailable.',
+      'Intensity percent is missing. Recovery interpretation unavailable.',
     );
   }
   if (external.isEmpty) warnings.add('No external load variables recorded.');
-  if (internal.isEmpty) warnings.add('No internal load variables recorded.');
+  if (internal.isEmpty) {
+    warnings.add('No internal intensity variables recorded.');
+  }
   if (session.rmssdExerciseIsDefault) {
     warnings.add(
       'RMSSD exercise was not provided. The validated 4 ms fallback was used.',
