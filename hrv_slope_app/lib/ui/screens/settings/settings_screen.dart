@@ -140,8 +140,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text('About', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 8),
                 Text(
-                  'HRV Slope App v0.2.0 — Phase 2\n'
-                  'Internal Training Load Monitor based on RMSSD-Slope\n'
+                  'HRV Slope App v1.0.0-beta\n'
+                  'Recovery Response Monitor based on RMSSD-Slope\n'
                   'Reference: Naranjo Orellana et al. (2019)\n'
                   'Local-only · No cloud · No telemetry',
                   style: TextStyle(fontSize: 12, color: AppColors.textHint),

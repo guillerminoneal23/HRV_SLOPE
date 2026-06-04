@@ -40,7 +40,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             icon: Icons.groups,
             title: 'Group Report',
             subtitle:
-                'Rank matching sessions by RMSSD-Slope and compare load response.',
+                'Rank matching sessions by RMSSD-Slope and compare recovery response.',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => GroupReportScreen(database: _db),

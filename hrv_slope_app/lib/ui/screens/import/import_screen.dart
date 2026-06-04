@@ -414,7 +414,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'XLSX import is deferred to Phase 2.1/3. Use CSV for now.',
+                      'XLSX import is planned for a future version. Use CSV for now.',
                       style: TextStyle(fontSize: 12, color: AppColors.textHint),
                     ),
                   ),

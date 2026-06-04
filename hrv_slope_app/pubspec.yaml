@@ -1,5 +1,5 @@
 name: hrv_slope_app
-description: "HRV Slope App — Internal Training Load Monitor based on RMSSD-Slope"
+description: "HRV Slope App — Recovery Response Monitor based on RMSSD-Slope"
 publish_to: 'none'
 version: 0.1.0+1
 

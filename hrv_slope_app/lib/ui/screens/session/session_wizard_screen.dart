@@ -578,6 +578,51 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
     _loadAthletes();
   }
 
+  /// Returns true if the user has entered any meaningful data in the wizard.
+  bool _hasUnsavedInput() {
+    if (_selectedAthlete != null) return true;
+    if (_sessionNameCtrl.text.trim().isNotEmpty) return true;
+    if (_sportCtrl.text.trim().isNotEmpty) return true;
+    if (_protocolCtrl.text.trim().isNotEmpty) return true;
+    if (_contextCtrl.text.trim().isNotEmpty) return true;
+    if (_notesCtrl.text.trim().isNotEmpty) return true;
+    if (_rmssdRecCtrl.text.trim().isNotEmpty) return true;
+    if (_rmssdExCtrl.text.trim().isNotEmpty) return true;
+    if (_rrRecResult != null) return true;
+    if (_rrExResult != null) return true;
+    for (final c in _extCtrls.values) {
+      if (c.text.trim().isNotEmpty) return true;
+    }
+    for (final c in _intCtrls.values) {
+      if (c.text.trim().isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  /// Shows a discard confirmation dialog. Returns true if the user confirms.
+  Future<bool> _confirmDiscard() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard session data?'),
+        content: const Text(
+          'You have unsaved session data. Do you want to discard it?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     const steps = [
@@ -588,22 +633,34 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
       'HRV',
       'Preview',
     ];
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('New Session — ${steps[_step]}'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(4),
-          child: LinearProgressIndicator(
-            value: (_step + 1) / steps.length,
-            backgroundColor: AppColors.surfaceContainerHigh,
+    return PopScope(
+      canPop: !_hasUnsavedInput(),
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        // The wizard is embedded as a tab, so popping would close the app.
+        // Show the discard dialog; if confirmed, allow the pop to proceed.
+        final discard = await _confirmDiscard();
+        if (discard && context.mounted) {
+          _resetWizard();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('New Session — ${steps[_step]}'),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(4),
+            child: LinearProgressIndicator(
+              value: (_step + 1) / steps.length,
+              backgroundColor: AppColors.surfaceContainerHigh,
+            ),
           ),
         ),
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 150),
+          child: _buildStep(),
+        ),
+        bottomNavigationBar: _buildBottomBar(),
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 150),
-        child: _buildStep(),
-      ),
-      bottomNavigationBar: _buildBottomBar(),
     );
   }
 

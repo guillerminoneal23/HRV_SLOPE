@@ -3,12 +3,15 @@ library;
 import 'dart:io';
 
 import 'package:hrv_slope_app/data/export/export_models.dart';
+import 'package:path/path.dart' as p;
 
 class ExportFileWriter {
   final Directory exportsDirectory;
 
   ExportFileWriter({Directory? exportsDirectory})
-    : exportsDirectory = exportsDirectory ?? Directory('exports');
+    : exportsDirectory =
+          exportsDirectory ??
+          Directory(p.join(p.dirname(Platform.resolvedExecutable), 'exports'));
 
   Future<ExportResult> writeCsv(CsvExportData data) async {
     if (!exportsDirectory.existsSync()) {
