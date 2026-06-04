@@ -17,7 +17,7 @@ Releases → Latest release → Assets
 Download the latest file similar to:
 
 ```text
-HRV-Slope-App-vX.X.X-windows.zip
+Release_HRV_SLOPE.rar
 ```
 
 Then:
