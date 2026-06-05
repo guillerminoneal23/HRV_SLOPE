@@ -6,6 +6,7 @@ import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/screens/nomogram/individual_nomogram_screen.dart';
 import 'package:hrv_slope_app/ui/screens/reports/individual_report_screen.dart';
@@ -93,7 +94,10 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   LongitudinalSeries? _series;
   Athlete? _athlete;
   List<SessionDetail> _details = [];
+  final ScrollController _scrollController = ScrollController();
   bool _loading = true;
+  bool _refreshingNomogram = false;
+  NomogramMode _selectedNomogramMode = NomogramMode.population;
   _OverlayMetric _overlay = _OverlayMetric.intensity;
   LongitudinalDashboardFilter _filter = const LongitudinalDashboardFilter();
   LongitudinalXAxisMode _xAxisMode = LongitudinalXAxisMode.sessionOrder;
@@ -122,6 +126,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _dateFromController.dispose();
     _dateToController.dispose();
     _notesController.dispose();
@@ -152,6 +157,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       athlete: athlete,
       details: details,
       filter: _filter,
+      requestedNomogramMode: _selectedNomogramMode,
     );
     if (mounted) {
       setState(() {
@@ -170,6 +176,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       athlete: athlete,
       details: _details,
       filter: filter,
+      requestedNomogramMode: _selectedNomogramMode,
     );
     setState(() {
       _filter = filter;
@@ -179,6 +186,31 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       )) {
         _selectedSessionId = null;
       }
+    });
+  }
+
+  Future<void> _applyNomogramMode(NomogramMode mode) async {
+    if (mode == _selectedNomogramMode) return;
+    final athlete = _athlete;
+    if (athlete == null) return;
+
+    setState(() {
+      _refreshingNomogram = true;
+      _selectedNomogramMode = mode;
+    });
+
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+    if (mode != _selectedNomogramMode) return;
+
+    setState(() {
+      _series = buildLongitudinalSeries(
+        athlete: athlete,
+        details: _details,
+        filter: _filter,
+        requestedNomogramMode: mode,
+      );
+      _refreshingNomogram = false;
     });
   }
 
@@ -313,6 +345,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         ],
       ),
       body: ListView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
         children: [
           _header(athlete, series),
@@ -891,25 +924,181 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     final available = series.nomogramReferenceSeries.availableCount;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: SwitchListTile(
-        value: _colorByOrellanaZone,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        title: Row(
-          children: const [
-            Expanded(child: Text('Color points by slope_Orellana_19 zone')),
-            Tooltip(
-              message:
-                  "Points are colored by the session's slope_Orellana_19 zone. The reference is calculated per session from primary intensity.",
-              child: Icon(Icons.help_outline, size: 18),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _nomogramModelSelection(),
+            const SizedBox(height: 12),
+            _nomogramModelMetadata(series.nomogramReferenceSeries),
+            const Divider(height: 16),
+            SwitchListTile(
+              value: _colorByOrellanaZone,
+              contentPadding: EdgeInsets.zero,
+              title: Row(
+                children: const [
+                  Expanded(
+                    child: Text('Color points by slope_Orellana_19 zone'),
+                  ),
+                  Tooltip(
+                    message:
+                        "Points are colored by the session's slope_Orellana_19 zone. The reference is calculated per session from primary intensity.",
+                    triggerMode: TooltipTriggerMode.tap,
+                    child: Icon(Icons.help_outline, size: 18),
+                  ),
+                ],
+              ),
+              subtitle: Text(
+                available == 0
+                    ? 'slope_Orellana_19 reference requires primary intensity and slope data.'
+                    : '$available sessions have slope_Orellana_19 zone data.',
+              ),
+              onChanged: (value) =>
+                  setState(() => _colorByOrellanaZone = value),
             ),
           ],
         ),
-        subtitle: Text(
-          available == 0
-              ? 'slope_Orellana_19 reference requires primary intensity and slope data.'
-              : '$available sessions have slope_Orellana_19 zone data.',
+      ),
+    );
+  }
+
+  Widget _nomogramModelSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Model selection',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
-        onChanged: (value) => setState(() => _colorByOrellanaZone = value),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SegmentedButton<NomogramMode>(
+            segments: const [
+              ButtonSegment(
+                value: NomogramMode.population,
+                label: Text('Study model'),
+              ),
+              ButtonSegment(
+                value: NomogramMode.hybrid,
+                label: Text('Hybrid model'),
+              ),
+              ButtonSegment(
+                value: NomogramMode.individual,
+                label: Text('Individual model'),
+              ),
+            ],
+            selected: {_selectedNomogramMode},
+            onSelectionChanged: _refreshingNomogram
+                ? null
+                : (selection) => _applyNomogramMode(selection.first),
+          ),
+        ),
+        if (_refreshingNomogram) ...[
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Updating model...',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _nomogramModelMetadata(LongitudinalNomogramReferenceSeries reference) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _row(
+            'Requested model',
+            _modeLabel(reference.requestedMode),
+            help: 'Model selected by the user.',
+          ),
+          _row(
+            'Active model',
+            _modeLabel(reference.activeMode),
+            help: 'Model actually used after readiness and fallback rules.',
+          ),
+          _row(
+            'Blend',
+            '${reference.athleteWeightPercent.toStringAsFixed(0)}% athlete / '
+                '${reference.populationWeightPercent.toStringAsFixed(0)}% study',
+            help:
+                'Percentage contribution from athlete history and study reference.',
+          ),
+          if (reference.requestedMode != reference.activeMode)
+            _referenceInfo(
+              'Requested ${_modeLabel(reference.requestedMode).toLowerCase()} is not available yet. '
+              'Using ${_modeLabel(reference.activeMode).toLowerCase()}.',
+            ),
+          if (reference.activeMode == NomogramMode.hybrid)
+            _referenceInfo(
+              'Hybrid model blends athlete history with the study reference.',
+            ),
+          if (reference.hasExtrapolatedPoints)
+            _referenceInfo(
+              'Estimated zone: some intensities are outside the validated reference range.',
+            ),
+          for (final warning in reference.warnings)
+            if (!reference.hasExtrapolatedPoints ||
+                !warning.contains('extrapolated'))
+              _referenceInfo(warning),
+          if (reference.readinessGaps.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Individual model not available yet:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 3),
+            for (final gap in reference.readinessGaps)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '• ${gap.criterion}: ${gap.currentValue}; required ${gap.requiredValue}.',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _referenceInfo(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, size: 14, color: AppColors.warning),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 12, color: AppColors.warning),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1374,26 +1563,45 @@ Widget _metric(String label, String value) {
   );
 }
 
-Widget _row(String label, String value, {Color? valueColor}) {
+Widget _row(String label, String value, {Color? valueColor, String? help}) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
     child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 130,
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ),
+        SizedBox(width: 130, child: _labelWithTooltip(label, help)),
         Expanded(
           child: Text(value, style: TextStyle(fontSize: 13, color: valueColor)),
         ),
       ],
     ),
+  );
+}
+
+Widget _labelWithTooltip(String label, String? help) {
+  final text = Text(
+    label,
+    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+  );
+  if (help == null) return text;
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Flexible(child: text),
+      const SizedBox(width: 4),
+      Tooltip(
+        message: help,
+        triggerMode: TooltipTriggerMode.tap,
+        child: InkResponse(
+          radius: 14,
+          child: const Icon(
+            Icons.help_outline,
+            size: 16,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ),
+    ],
   );
 }
 
@@ -1442,6 +1650,17 @@ String _fieldNumber(double? value) {
 
 String _fixed(double? value, int digits) =>
     value == null ? '-' : value.toStringAsFixed(digits);
+
+String _modeLabel(NomogramMode mode) {
+  switch (mode) {
+    case NomogramMode.population:
+      return 'Study model';
+    case NomogramMode.hybrid:
+      return 'Hybrid model';
+    case NomogramMode.individual:
+      return 'Individual model';
+  }
+}
 
 String _shortText(String value, int maxLength) {
   if (value.length <= maxLength) return value;

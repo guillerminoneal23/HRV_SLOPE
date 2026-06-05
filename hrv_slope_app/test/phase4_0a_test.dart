@@ -11,6 +11,7 @@ import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/shared/engine/statistics.dart';
 import 'package:hrv_slope_app/ui/screens/athletes/athlete_detail_screen.dart';
@@ -1201,6 +1202,117 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('reference card shows nomogram model selector and metadata', (
+      tester,
+    ) async {
+      await _seedSession(db, athleteId, slope: 0.5);
+      await _seedSession(db, athleteId, slope: 1.0, day: 2);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Model selection'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SegmentedButton<NomogramMode>), findsOneWidget);
+      expect(find.text('Study model'), findsWidgets);
+      expect(find.text('Hybrid model'), findsOneWidget);
+      expect(find.text('Individual model'), findsOneWidget);
+      expect(find.text('Requested model'), findsOneWidget);
+      expect(find.text('Active model'), findsOneWidget);
+      expect(find.text('Blend'), findsOneWidget);
+      expect(find.byTooltip('Model selected by the user.'), findsOneWidget);
+      expect(
+        find.byTooltip(
+          'Model actually used after readiness and fallback rules.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip(
+          'Percentage contribution from athlete history and study reference.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('changing longitudinal model keeps reference area visible', (
+      tester,
+    ) async {
+      await _seedSession(db, athleteId, slope: 0.5);
+      await _seedSession(db, athleteId, slope: 1.0, day: 2);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Hybrid model'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Hybrid model'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Model selection'), findsOneWidget);
+      expect(
+        find.text('Color points by slope_Orellana_19 zone'),
+        findsOneWidget,
+      );
+      expect(find.text('Requested model'), findsOneWidget);
+      expect(find.text('Hybrid model'), findsWidgets);
+      expect(
+        find.text(
+          'Requested hybrid model is not available yet. Using study model.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('requested individual model shows fallback helper text', (
+      tester,
+    ) async {
+      await _seedSession(db, athleteId, slope: 0.5);
+      await _seedSession(db, athleteId, slope: 1.0, day: 2);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Individual model'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Individual model'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Model selection'), findsOneWidget);
+      expect(
+        find.text(
+          'Requested individual model is not available yet. Using study model.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Individual model not available yet:'), findsOneWidget);
+      expect(find.textContaining('Valid sessions:'), findsOneWidget);
     });
 
     testWidgets('zone color toggle disables Slope and ITL zone colors', (
