@@ -395,7 +395,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.text('Model selection'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
       expect(find.byType(SegmentedButton<NomogramMode>), findsOneWidget);
+      expect(find.text('Nomogram Reference'), findsOneWidget);
+      expect(find.text('Model selection'), findsOneWidget);
+      expect(find.text('Nomogram Model'), findsNothing);
       expect(find.text('Study model'), findsWidgets);
       expect(find.text('Hybrid model'), findsOneWidget);
       expect(find.text('Individual model'), findsOneWidget);
@@ -411,6 +421,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.text('Hybrid model'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Hybrid model'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
@@ -440,6 +456,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.text('Individual model'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Individual model'));
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(

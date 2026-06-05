@@ -131,7 +131,6 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         children: [
           _buildHeader(r),
           if (r.warnings.isNotEmpty) _buildWarnings(r.warnings),
-          _buildNomogramModeSelector(),
           _buildExternalLoad(r),
           _buildInternalLoad(r),
           _buildHrvSection(r),
@@ -143,11 +142,15 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
     );
   }
 
-  Widget _buildNomogramModeSelector() {
-    return _card(
-      'Nomogram Model',
-      icon: Icons.tune,
+  Widget _buildNomogramModelSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'Model selection',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SegmentedButton<NomogramMode>(
@@ -447,8 +450,10 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
       return _card(
         'Nomogram Reference',
         icon: Icons.auto_graph,
-        children: const [
-          Text(
+        children: [
+          _buildNomogramModelSelection(),
+          const SizedBox(height: 12),
+          const Text(
             'Intensity percent is required for nomogram placement.',
             style: TextStyle(color: AppColors.textHint),
           ),
@@ -460,6 +465,8 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
       'Nomogram Reference',
       icon: Icons.auto_graph,
       children: [
+        _buildNomogramModelSelection(),
+        const SizedBox(height: 12),
         _buildNomogramModelMetadata(n),
         const Divider(height: 20),
         _row('Preset', n.presetName),
