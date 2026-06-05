@@ -1,4 +1,4 @@
-// Phase 4.0B tests — Individual Nomogram Fitting UI + Hybrid Overlay.
+// Phase 4.0B tests — Individual Nomogram Fitting UI.
 import 'dart:io';
 
 import 'package:drift/drift.dart' as drift;
@@ -9,6 +9,7 @@ import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/shared/engine/individual_nomogram_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/ui/screens/athletes/athlete_detail_screen.dart';
 import 'package:hrv_slope_app/ui/screens/nomogram/individual_nomogram_screen.dart';
 import 'package:hrv_slope_app/ui/widgets/nomogram_chart.dart';
@@ -193,6 +194,33 @@ void main() {
 
       expect(data.excludedSessions.single.reason.key, 'missing_intensity');
     });
+
+    test('default requested mode follows recommended mode', () {
+      final data = _data(_nomogramDetails([60, 62, 64, 78, 82, 86]));
+
+      expect(data.summary.recommendedMode.key, 'hybrid');
+      expect(data.requestedMode, NomogramMode.hybrid);
+      expect(data.activeMode, NomogramMode.hybrid);
+      expect(data.resolvedBandPoints, isNotEmpty);
+    });
+
+    test('requested individual falls back and exposes readiness gaps', () {
+      final data = buildIndividualNomogramData(
+        athlete: _athlete(),
+        details: _nomogramDetails([60, 62, 64, 78, 82, 86]),
+        requestedNomogramMode: NomogramMode.individual,
+      );
+
+      expect(data.requestedMode, NomogramMode.individual);
+      expect(data.activeMode, NomogramMode.hybrid);
+      expect(data.readinessGaps, isNotEmpty);
+    });
+
+    test('low intensity points extend resolved band range', () {
+      final data = _data(_nomogramDetails([35, 60, 62, 64, 78, 82, 86]));
+
+      expect(data.resolvedBandPoints.first.intensityPercent, 35);
+    });
   });
 
   group('Individual nomogram UI', () {
@@ -258,7 +286,9 @@ void main() {
       expect(find.textContaining('Population-only mode'), findsOneWidget);
     });
 
-    testWidgets('robust data state renders individual model', (tester) async {
+    testWidgets('robust data state renders model metadata without overlays', (
+      tester,
+    ) async {
       await _seedMany(db, athleteId, [
         58,
         62,
@@ -281,8 +311,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Individual model mode'), findsOneWidget);
-      expect(find.text('Individual fit'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Model selection'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+
+      expect(find.text('Model selection'), findsOneWidget);
+      expect(find.text('Requested model'), findsOneWidget);
+      expect(find.text('Active model'), findsOneWidget);
+      expect(find.text('Individual fit'), findsNothing);
+      expect(find.text('Hybrid expected'), findsNothing);
     });
 
     testWidgets('points list renders valid points', (tester) async {
@@ -339,7 +378,9 @@ void main() {
       expect(find.text('Session points'), findsOneWidget);
     });
 
-    testWidgets('chart renders hybrid curve when applicable', (tester) async {
+    testWidgets('chart renders one active band set when hybrid applies', (
+      tester,
+    ) async {
       await _seedMany(db, athleteId, [60, 62, 64, 78, 82, 86]);
 
       await tester.pumpWidget(
@@ -350,11 +391,45 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.scrollUntilVisible(
-        find.text('Hybrid expected'),
+        find.text('Session points'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text('Hybrid expected'), findsOneWidget);
+      expect(find.text('Lower band'), findsOneWidget);
+      expect(find.text('Mean'), findsOneWidget);
+      expect(find.text('Upper band'), findsOneWidget);
+      expect(find.text('Session points'), findsOneWidget);
+      expect(find.text('Individual fit'), findsNothing);
+      expect(find.text('Hybrid expected'), findsNothing);
+    });
+
+    testWidgets('model selector can request individual fallback', (
+      tester,
+    ) async {
+      await _seedMany(db, athleteId, [60, 62, 64, 78, 82, 86]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualNomogramScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Model selection'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Study model'), findsWidgets);
+      expect(find.text('Hybrid model'), findsWidgets);
+      expect(find.text('Individual model'), findsWidgets);
+
+      await tester.tap(find.text('Individual model').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Requested model'), findsOneWidget);
+      expect(find.text('Active model'), findsOneWidget);
+      expect(find.text('Individual model not available yet:'), findsOneWidget);
     });
 
     test('no medical diagnostic language', () {

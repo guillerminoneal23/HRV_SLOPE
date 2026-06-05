@@ -5,8 +5,9 @@ import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
 import 'package:hrv_slope_app/shared/engine/individual_nomogram_builder.dart';
-import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/nomogram_chart.dart';
 
@@ -26,15 +27,24 @@ class IndividualNomogramScreen extends StatefulWidget {
 }
 
 class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
+  final _scrollController = ScrollController();
   IndividualNomogramData? _data;
   Athlete? _athlete;
   PopulationNomogramSource _preset = PopulationNomogramSource.excelOperational;
+  NomogramMode? _selectedNomogramMode;
   bool _loading = true;
+  bool _refreshingNomogram = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -61,6 +71,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
         _athlete = athlete;
         _preset = preset;
         _data = data;
+        _selectedNomogramMode = data.requestedMode;
         _loading = false;
       });
     }
@@ -69,18 +80,49 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
   void _changePreset(PopulationNomogramSource preset) async {
     final athlete = _athlete;
     if (athlete == null) return;
+    final requestedMode = _selectedNomogramMode ?? _data?.requestedMode;
+    setState(() {
+      _preset = preset;
+      _refreshingNomogram = true;
+    });
     final details = await widget.database.sessionsDao
         .getSessionDetailsForAthlete(widget.athleteId);
     if (mounted) {
       setState(() {
-        _preset = preset;
         _data = buildIndividualNomogramData(
           athlete: athlete,
           details: details,
           populationPreset: preset,
+          requestedNomogramMode: requestedMode,
         );
+        _refreshingNomogram = false;
       });
     }
+  }
+
+  Future<void> _applyNomogramMode(NomogramMode mode) async {
+    if (mode == (_selectedNomogramMode ?? _data?.requestedMode)) return;
+    final athlete = _athlete;
+    if (athlete == null) return;
+
+    setState(() {
+      _selectedNomogramMode = mode;
+      _refreshingNomogram = true;
+    });
+
+    final details = await widget.database.sessionsDao
+        .getSessionDetailsForAthlete(widget.athleteId);
+    if (!mounted || mode != _selectedNomogramMode) return;
+
+    setState(() {
+      _data = buildIndividualNomogramData(
+        athlete: athlete,
+        details: details,
+        populationPreset: _preset,
+        requestedNomogramMode: mode,
+      );
+      _refreshingNomogram = false;
+    });
   }
 
   @override
@@ -109,6 +151,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
         ],
       ),
       body: ListView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
         children: [
           _header(athlete, data),
@@ -239,13 +282,6 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
   }
 
   Widget _chartCard(IndividualNomogramData data) {
-    final mode = data.summary.recommendedMode;
-    final showIndividual =
-        data.fittedModel != null &&
-        mode != IndividualNomogramRecommendedMode.populationOnly;
-    final showHybrid =
-        data.fittedModel != null &&
-        mode == IndividualNomogramRecommendedMode.hybrid;
     final points = [
       for (final point in data.validPoints)
         NomogramObservedPoint(
@@ -292,6 +328,10 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
               ],
             ),
             const SizedBox(height: 8),
+            _nomogramModelSelection(data),
+            const SizedBox(height: 12),
+            _nomogramModelMetadata(data),
+            const SizedBox(height: 12),
             Text(
               _modeGuidance(data),
               style: const TextStyle(color: AppColors.textSecondary),
@@ -300,13 +340,152 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
             NomogramChart(
               preset: data.populationPreset,
               observedPoints: points,
-              individualCurvePoints: _chartCurve(data.individualCurvePoints),
-              hybridCurvePoints: _chartCurve(data.hybridCurvePoints),
-              showIndividualCurve: showIndividual,
-              showHybridCurve: showHybrid,
+              bandPoints: data.resolvedBandPoints,
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _nomogramModelSelection(IndividualNomogramData data) {
+    final selected = _selectedNomogramMode ?? data.requestedMode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Model selection',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SegmentedButton<NomogramMode>(
+            segments: const [
+              ButtonSegment(
+                value: NomogramMode.population,
+                label: Text('Study model'),
+              ),
+              ButtonSegment(
+                value: NomogramMode.hybrid,
+                label: Text('Hybrid model'),
+              ),
+              ButtonSegment(
+                value: NomogramMode.individual,
+                label: Text('Individual model'),
+              ),
+            ],
+            selected: {selected},
+            onSelectionChanged: _refreshingNomogram
+                ? null
+                : (selection) => _applyNomogramMode(selection.first),
+          ),
+        ),
+        if (_refreshingNomogram) ...[
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Updating model...',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _nomogramModelMetadata(IndividualNomogramData data) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _row(
+            'Requested model',
+            _modeLabel(data.requestedMode),
+            help: 'Model selected by the user.',
+          ),
+          _row(
+            'Active model',
+            _modeLabel(data.activeMode),
+            help: 'Model actually used after readiness and fallback rules.',
+          ),
+          _row(
+            'Blend',
+            '${data.athleteWeightPercent.toStringAsFixed(0)}% athlete / '
+                '${data.populationWeightPercent.toStringAsFixed(0)}% study',
+            help:
+                'Percentage contribution from athlete history and study reference.',
+          ),
+          _row('Preset', data.populationPreset.presetName),
+          if (data.requestedMode != data.activeMode)
+            _referenceInfo(
+              'Requested ${_modeLabel(data.requestedMode).toLowerCase()} is not available yet. '
+              'Using ${_modeLabel(data.activeMode).toLowerCase()}.',
+            ),
+          if (data.activeMode == NomogramMode.hybrid)
+            _referenceInfo(
+              'Hybrid model blends athlete history with the study reference.',
+            ),
+          if (data.hasExtrapolatedPoints)
+            _referenceInfo(
+              'Estimated zone: some intensities are outside the validated reference range.',
+            ),
+          for (final warning in data.modelWarnings)
+            if (!data.hasExtrapolatedPoints ||
+                !warning.contains('extrapolated'))
+              _referenceInfo(warning),
+          if (data.readinessGaps.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Individual model not available yet:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 3),
+            for (final gap in data.readinessGaps)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '• ${gap.criterion}: ${gap.currentValue}; required ${gap.requiredValue}.',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _referenceInfo(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, size: 14, color: AppColors.warning),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 12, color: AppColors.warning),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -405,19 +584,37 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
   }
 }
 
-Widget _row(String label, String value) {
+Widget _row(String label, String value, {String? help}) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
     child: Row(
       children: [
         SizedBox(
           width: 135,
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-            ),
+          child: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              if (help != null) ...[
+                const SizedBox(width: 4),
+                Tooltip(
+                  message: help,
+                  triggerMode: TooltipTriggerMode.tap,
+                  child: const Icon(
+                    Icons.help_outline,
+                    size: 15,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
@@ -431,26 +628,25 @@ Widget _chip(String label, num value, {int digits = 0}) {
   return Chip(label: Text('$label: $display'));
 }
 
-List<NomogramCurveOverlayPoint> _chartCurve(
-  List<IndividualNomogramCurvePoint> points,
-) {
-  return [
-    for (final point in points)
-      NomogramCurveOverlayPoint(
-        intensityPercent: point.intensityPercent,
-        slope: point.slope,
-      ),
-  ];
+String _modeGuidance(IndividualNomogramData data) {
+  switch (data.activeMode) {
+    case NomogramMode.population:
+      return 'Population-only mode: athlete points are shown, but no individual curve is used yet.';
+    case NomogramMode.hybrid:
+      return 'Hybrid mode: lower, mean, and upper bands blend athlete history with the study reference.';
+    case NomogramMode.individual:
+      return 'Individual model mode: lower, mean, and upper bands use the athlete-specific fit.';
+  }
 }
 
-String _modeGuidance(IndividualNomogramData data) {
-  switch (data.summary.recommendedMode) {
-    case IndividualNomogramRecommendedMode.populationOnly:
-      return 'Population-only mode: athlete points are shown, but no individual curve is used yet.';
-    case IndividualNomogramRecommendedMode.hybrid:
-      return 'Hybrid mode: expected slope blends population reference and athlete history.';
-    case IndividualNomogramRecommendedMode.individual:
-      return 'Individual model mode: athlete-specific fit is primary, with population bands retained as context.';
+String _modeLabel(NomogramMode mode) {
+  switch (mode) {
+    case NomogramMode.population:
+      return 'Study model';
+    case NomogramMode.hybrid:
+      return 'Hybrid model';
+    case NomogramMode.individual:
+      return 'Individual model';
   }
 }
 

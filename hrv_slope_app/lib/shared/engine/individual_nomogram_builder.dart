@@ -4,10 +4,14 @@
 /// aggregates. The builder is pure and does not read or write the database.
 library;
 
+import 'dart:math' as math;
+
 import 'package:hrv_slope_app/data/database/app_database.dart'
     hide NomogramModel;
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_resolver.dart';
 
 enum IndividualNomogramRecommendedMode { populationOnly, hybrid, individual }
 
@@ -157,6 +161,14 @@ class IndividualNomogramData {
   final List<IndividualNomogramCurvePoint> populationCurvePoints;
   final List<IndividualNomogramCurvePoint> individualCurvePoints;
   final List<IndividualNomogramCurvePoint> hybridCurvePoints;
+  final List<NomogramBandPoint> resolvedBandPoints;
+  final NomogramMode requestedMode;
+  final NomogramMode activeMode;
+  final double athleteWeightPercent;
+  final double populationWeightPercent;
+  final List<ReadinessGap> readinessGaps;
+  final List<String> modelWarnings;
+  final bool hasExtrapolatedPoints;
   final List<String> warnings;
   final IndividualNomogramSummary summary;
 
@@ -174,6 +186,14 @@ class IndividualNomogramData {
     required this.populationCurvePoints,
     required this.individualCurvePoints,
     required this.hybridCurvePoints,
+    this.resolvedBandPoints = const [],
+    this.requestedMode = NomogramMode.population,
+    this.activeMode = NomogramMode.population,
+    this.athleteWeightPercent = 0,
+    this.populationWeightPercent = 100,
+    this.readinessGaps = const [],
+    this.modelWarnings = const [],
+    this.hasExtrapolatedPoints = false,
     required this.warnings,
     required this.summary,
   });
@@ -186,6 +206,7 @@ IndividualNomogramData buildIndividualNomogramData({
   required Athlete athlete,
   required List<SessionDetail> details,
   PopulationNomogramSource populationPreset = kDefaultPopulationNomogramSource,
+  NomogramMode? requestedNomogramMode,
 }) {
   final sorted = [...details]
     ..sort((a, b) => a.session.date.compareTo(b.session.date));
@@ -227,6 +248,8 @@ IndividualNomogramData buildIndividualNomogramData({
   final individualWeight = individualWeightForConfidence(confidence);
   final populationWeight = 1.0 - individualWeight;
   final recommendedMode = _modeFor(confidence);
+  final requestedMode =
+      requestedNomogramMode ?? _nomogramModeForRecommended(recommendedMode);
 
   NomogramModel? fittedModel;
   final warnings = <String>[];
@@ -334,6 +357,28 @@ IndividualNomogramData buildIndividualNomogramData({
             confidence: confidence,
           );
         });
+  final individualBands = fittedModel == null
+      ? null
+      : buildIndividualModelBands(
+          fittedModel: fittedModel,
+          sourcePoints: fitPoints,
+        );
+  final readiness = evaluateIndividualReadiness(
+    intensities: fitPoints.map((point) => point.intensityPercent).toList(),
+    rSquared: individualBands?.rSquared,
+    cvRmse: individualBands?.cvRmse,
+  );
+  final resolvedCurve = _resolvedCurve(
+    requestedMode: requestedMode,
+    populationPreset: populationPreset,
+    individualBands: individualBands,
+    readiness: readiness,
+    fitPoints: fitPoints,
+  );
+  final representative = resolvedCurve.isEmpty ? null : resolvedCurve.last;
+  final modelWarnings = _uniqueStrings(
+    resolvedCurve.expand((point) => point.warnings),
+  );
 
   final explanation = _explanationFor(confidence);
   return IndividualNomogramData(
@@ -350,6 +395,29 @@ IndividualNomogramData buildIndividualNomogramData({
     populationCurvePoints: List.unmodifiable(populationCurve),
     individualCurvePoints: List.unmodifiable(individualCurve),
     hybridCurvePoints: List.unmodifiable(hybridCurve),
+    resolvedBandPoints: List.unmodifiable(
+      resolvedCurve.map(
+        (point) => NomogramBandPoint(
+          intensityPercent: point.intensityPercent,
+          lower: point.lower,
+          mean: point.mean,
+          upper: point.upper,
+        ),
+      ),
+    ),
+    requestedMode: requestedMode,
+    activeMode: representative?.activeMode ?? NomogramMode.population,
+    athleteWeightPercent: representative?.athleteWeightPercent ?? 0,
+    populationWeightPercent: representative?.populationWeightPercent ?? 100,
+    readinessGaps: List.unmodifiable(
+      requestedMode == NomogramMode.individual &&
+              (representative?.activeMode ?? NomogramMode.population) !=
+                  NomogramMode.individual
+          ? readiness.gaps
+          : const <ReadinessGap>[],
+    ),
+    modelWarnings: List.unmodifiable(modelWarnings),
+    hasExtrapolatedPoints: resolvedCurve.any((point) => point.isExtrapolated),
     warnings: List.unmodifiable(warnings),
     summary: IndividualNomogramSummary(
       totalSessions: sorted.length,
@@ -362,6 +430,25 @@ IndividualNomogramData buildIndividualNomogramData({
       recommendedMode: recommendedMode,
       explanationText: explanation,
     ),
+  );
+}
+
+List<ResolvedNomogramBands> _resolvedCurve({
+  required NomogramMode requestedMode,
+  required PopulationNomogramSource populationPreset,
+  required IndividualModelBands? individualBands,
+  required IndividualReadiness readiness,
+  required List<NomogramPoint> fitPoints,
+}) {
+  final range = _rangeForFitPoints(populationPreset, fitPoints);
+  return resolveNomogramBandCurve(
+    startIntensity: range.start,
+    endIntensity: range.end,
+    steps: 40,
+    requestedMode: requestedMode,
+    populationPreset: populationPreset,
+    individualBands: individualBands,
+    readiness: readiness,
   );
 }
 
@@ -470,6 +557,50 @@ List<IndividualNomogramCurvePoint> _sampleCurve(
     case PopulationNomogramSource.slopeOrellana19:
       return (start: 60.0, end: 105.0);
   }
+}
+
+({double start, double end}) _rangeForFitPoints(
+  PopulationNomogramSource preset,
+  List<NomogramPoint> points,
+) {
+  final range = _rangeFor(preset);
+  if (points.isEmpty) return range;
+
+  final minIntensity = points
+      .map((point) => point.intensityPercent)
+      .reduce((a, b) => math.min(a, b));
+  final maxIntensity = points
+      .map((point) => point.intensityPercent)
+      .reduce((a, b) => math.max(a, b));
+  final start = math.min(range.start, (minIntensity / 5).floor() * 5.0);
+  final end = math.max(range.end, (maxIntensity / 5).ceil() * 5.0);
+
+  if ((end - start).abs() < 1e-9) {
+    return (start: start, end: start + 5.0);
+  }
+  return (start: start, end: end);
+}
+
+NomogramMode _nomogramModeForRecommended(
+  IndividualNomogramRecommendedMode mode,
+) {
+  switch (mode) {
+    case IndividualNomogramRecommendedMode.populationOnly:
+      return NomogramMode.population;
+    case IndividualNomogramRecommendedMode.hybrid:
+      return NomogramMode.hybrid;
+    case IndividualNomogramRecommendedMode.individual:
+      return NomogramMode.individual;
+  }
+}
+
+List<String> _uniqueStrings(Iterable<String> values) {
+  final seen = <String>{};
+  final output = <String>[];
+  for (final value in values) {
+    if (seen.add(value)) output.add(value);
+  }
+  return output;
 }
 
 String _classificationKey(InternalLoadClassification classification) {

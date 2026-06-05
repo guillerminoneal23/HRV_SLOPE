@@ -46,6 +46,7 @@ class NomogramChart extends StatelessWidget {
   final double? observedIntensity;
   final double? observedSlope;
   final List<NomogramObservedPoint> observedPoints;
+  final List<NomogramBandPoint> bandPoints;
   final List<NomogramCurveOverlayPoint> individualCurvePoints;
   final List<NomogramCurveOverlayPoint> hybridCurvePoints;
   final bool showIndividualCurve;
@@ -57,6 +58,7 @@ class NomogramChart extends StatelessWidget {
     this.observedIntensity,
     this.observedSlope,
     this.observedPoints = const [],
+    this.bandPoints = const [],
     this.individualCurvePoints = const [],
     this.hybridCurvePoints = const [],
     this.showIndividualCurve = false,
@@ -75,8 +77,7 @@ class NomogramChart extends StatelessWidget {
         ),
     ];
 
-    // Determine X-axis range from preset
-    final range = _rangeFor(preset);
+    final range = _chartRange(points);
     final xMin = range.start;
     final xMax = range.end;
 
@@ -84,9 +85,15 @@ class NomogramChart extends StatelessWidget {
     final steps = 80;
     final dx = (xMax - xMin) / steps;
 
-    final lowerSpots = <FlSpot>[];
-    final meanSpots = <FlSpot>[];
-    final upperSpots = <FlSpot>[];
+    final lowerSpots = bandPoints
+        .map((point) => FlSpot(point.intensityPercent, point.lower))
+        .toList();
+    final meanSpots = bandPoints
+        .map((point) => FlSpot(point.intensityPercent, point.mean))
+        .toList();
+    final upperSpots = bandPoints
+        .map((point) => FlSpot(point.intensityPercent, point.upper))
+        .toList();
     final individualSpots = individualCurvePoints
         .map((point) => FlSpot(point.intensityPercent, point.slope))
         .toList();
@@ -94,12 +101,14 @@ class NomogramChart extends StatelessWidget {
         .map((point) => FlSpot(point.intensityPercent, point.slope))
         .toList();
 
-    for (int i = 0; i <= steps; i++) {
-      final x = xMin + i * dx;
-      final bands = evaluatePopulationNomogramBands(x, source: preset);
-      lowerSpots.add(FlSpot(x, bands.expectedLower));
-      meanSpots.add(FlSpot(x, bands.expectedMean));
-      upperSpots.add(FlSpot(x, bands.expectedUpper));
+    if (bandPoints.isEmpty) {
+      for (int i = 0; i <= steps; i++) {
+        final x = xMin + i * dx;
+        final bands = evaluatePopulationNomogramBands(x, source: preset);
+        lowerSpots.add(FlSpot(x, bands.expectedLower));
+        meanSpots.add(FlSpot(x, bands.expectedMean));
+        upperSpots.add(FlSpot(x, bands.expectedUpper));
+      }
     }
 
     // Determine Y range
@@ -341,6 +350,28 @@ class NomogramChart extends StatelessWidget {
       case PopulationNomogramSource.slopeOrellana19:
         return (start: 60.0, end: 105.0);
     }
+  }
+
+  ({double start, double end}) _chartRange(List<NomogramObservedPoint> points) {
+    final presetRange = _rangeFor(preset);
+    var start = presetRange.start;
+    var end = presetRange.end;
+
+    for (final point in points) {
+      if (point.xIntensityPercent < start) start = point.xIntensityPercent;
+      if (point.xIntensityPercent > end) end = point.xIntensityPercent;
+    }
+    for (final point in bandPoints) {
+      if (point.intensityPercent < start) start = point.intensityPercent;
+      if (point.intensityPercent > end) end = point.intensityPercent;
+    }
+
+    start = (start / 5).floor() * 5.0;
+    end = (end / 5).ceil() * 5.0;
+    if ((end - start).abs() < 1e-9) {
+      end = start + 5;
+    }
+    return (start: start, end: end);
   }
 
   Color _pointColor(String? classification) {
