@@ -217,6 +217,7 @@ class NomogramBandEvaluation {
   final double expectedLower;
   final double expectedMean;
   final double expectedUpper;
+  final bool isExtrapolated;
   final List<String> warnings;
 
   const NomogramBandEvaluation({
@@ -226,6 +227,7 @@ class NomogramBandEvaluation {
     required this.expectedLower,
     required this.expectedMean,
     required this.expectedUpper,
+    this.isExtrapolated = false,
     required this.warnings,
   });
 }
@@ -355,8 +357,11 @@ NomogramBandEvaluation evaluatePopulationNomogramBands(
   final last = points.last;
   final warnings = <String>[];
 
-  if (intensityPercent < first.intensityPercent ||
-      intensityPercent > last.intensityPercent) {
+  final isExtrapolated =
+      intensityPercent < first.intensityPercent ||
+      intensityPercent > last.intensityPercent;
+
+  if (isExtrapolated) {
     warnings.add(
       'Intensity ${intensityPercent.toStringAsFixed(2)}% is outside the '
       '${first.intensityPercent.toStringAsFixed(2)}-'
@@ -376,6 +381,7 @@ NomogramBandEvaluation evaluatePopulationNomogramBands(
     expectedLower: max(kMinSlopeForInterpretation, lower),
     expectedMean: max(kMinSlopeForInterpretation, mean),
     expectedUpper: max(kMinSlopeForInterpretation, upper),
+    isExtrapolated: isExtrapolated,
     warnings: warnings,
   );
 }

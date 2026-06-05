@@ -12,7 +12,7 @@ import 'package:hrv_slope_app/shared/engine/nomogram_resolver.dart';
 void main() {
   // ── Helper factories ──
 
-  IndividualModelBands _makeIndividualBands({
+  IndividualModelBands makeIndividualBands({
     double a = 100.0,
     double b = -0.05,
     double c = 0.1,
@@ -24,7 +24,7 @@ void main() {
     );
   }
 
-  IndividualReadiness _makeReadiness({
+  IndividualReadiness makeReadiness({
     required bool isReady,
     int validSessions = 15,
   }) {
@@ -47,28 +47,31 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
   group('IndividualModelBands', () {
     test('mean evaluates exponential model', () {
-      final bands = _makeIndividualBands();
+      final bands = makeIndividualBands();
       final m = bands.mean(70.0);
       expect(m, greaterThan(0.1));
     });
 
     test('lower is mean minus σ, floored at 0.1', () {
-      final bands = _makeIndividualBands(residualStdDev: 0.3);
+      final bands = makeIndividualBands(residualStdDev: 0.3);
       final m = bands.mean(90.0);
       final l = bands.lower(90.0);
       expect(l, max(0.1, m - 0.3));
     });
 
     test('upper is mean plus σ', () {
-      final bands = _makeIndividualBands(residualStdDev: 0.3);
+      final bands = makeIndividualBands(residualStdDev: 0.3);
       final m = bands.mean(70.0);
       final u = bands.upper(70.0);
       expect(u, closeTo(m + 0.3, 0.001));
     });
 
     test('lower never goes below 0.1', () {
-      final bands = _makeIndividualBands(
-        a: 0.01, b: -0.001, c: 0.1, residualStdDev: 5.0,
+      final bands = makeIndividualBands(
+        a: 0.01,
+        b: -0.001,
+        c: 0.1,
+        residualStdDev: 5.0,
       );
       expect(bands.lower(95.0), 0.1);
     });
@@ -90,9 +93,18 @@ void main() {
     test('returns positive value for imperfect fit', () {
       final params = NomogramParams(a: 10.0, b: -0.05, c: 0.1);
       final points = [
-        NomogramPoint(intensityPercent: 60.0, slope: params.evaluate(60.0) + 0.5),
-        NomogramPoint(intensityPercent: 80.0, slope: params.evaluate(80.0) - 0.3),
-        NomogramPoint(intensityPercent: 100.0, slope: params.evaluate(100.0) + 0.1),
+        NomogramPoint(
+          intensityPercent: 60.0,
+          slope: params.evaluate(60.0) + 0.5,
+        ),
+        NomogramPoint(
+          intensityPercent: 80.0,
+          slope: params.evaluate(80.0) - 0.3,
+        ),
+        NomogramPoint(
+          intensityPercent: 100.0,
+          slope: params.evaluate(100.0) + 0.1,
+        ),
       ];
       final std = computeResidualStdDev(points, params);
       expect(std, greaterThan(0.0));
@@ -100,9 +112,7 @@ void main() {
 
     test('single point returns 0', () {
       final params = NomogramParams(a: 10.0, b: -0.05, c: 0.1);
-      final points = [
-        NomogramPoint(intensityPercent: 70.0, slope: 1.5),
-      ];
+      final points = [NomogramPoint(intensityPercent: 70.0, slope: 1.5)];
       expect(computeResidualStdDev(points, params), 0.0);
     });
   });
@@ -135,10 +145,58 @@ void main() {
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
+  group('buildIndividualModelBands', () {
+    test('copies fit params and derives residual standard deviation', () {
+      final points = [
+        NomogramPoint(intensityPercent: 55.0, slope: 2.0),
+        NomogramPoint(intensityPercent: 60.0, slope: 1.5),
+        NomogramPoint(intensityPercent: 70.0, slope: 0.8),
+        NomogramPoint(intensityPercent: 80.0, slope: 0.4),
+        NomogramPoint(intensityPercent: 90.0, slope: 0.2),
+        NomogramPoint(intensityPercent: 100.0, slope: 0.15),
+      ];
+      final model = fitIndividualNomogram(points);
+
+      final bands = buildIndividualModelBands(
+        fittedModel: model,
+        sourcePoints: points,
+      );
+
+      expect(bands.params, model.params);
+      expect(
+        bands.residualStdDev,
+        closeTo(computeResidualStdDev(points, model.params), 1e-12),
+      );
+      expect(bands.rSquared, model.rSquared);
+      expect(bands.sourcePointCount, points.length);
+    });
+
+    test('computes LOO-CV RMSE when source points allow it', () {
+      final points = [
+        NomogramPoint(intensityPercent: 55.0, slope: 2.0),
+        NomogramPoint(intensityPercent: 60.0, slope: 1.5),
+        NomogramPoint(intensityPercent: 70.0, slope: 0.8),
+        NomogramPoint(intensityPercent: 80.0, slope: 0.4),
+        NomogramPoint(intensityPercent: 90.0, slope: 0.2),
+        NomogramPoint(intensityPercent: 100.0, slope: 0.15),
+      ];
+      final model = fitIndividualNomogram(points);
+
+      final bands = buildIndividualModelBands(
+        fittedModel: model,
+        sourcePoints: points,
+      );
+
+      expect(bands.cvRmse, isNotNull);
+      expect(bands.cvRmse, closeTo(computeLooCvRmse(points)!, 1e-12));
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
   group('resolveNomogramBands — population mode', () {
     test('always returns population bands regardless of individual data', () {
-      final indBands = _makeIndividualBands();
-      final readiness = _makeReadiness(isReady: true);
+      final indBands = makeIndividualBands();
+      final readiness = makeReadiness(isReady: true);
 
       final result = resolveNomogramBands(
         intensityPercent: 70.0,
@@ -174,7 +232,7 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
   group('resolveNomogramBands — hybrid mode', () {
     test('blends population and individual when data available', () {
-      final indBands = _makeIndividualBands();
+      final indBands = makeIndividualBands();
       final readiness = evaluateIndividualReadiness(
         intensities: List.generate(7, (i) => 50.0 + i * 8.0),
       );
@@ -215,7 +273,7 @@ void main() {
         intensityPercent: 70.0,
         requestedMode: NomogramMode.hybrid,
         populationPreset: PopulationNomogramSource.excelOperational,
-        individualBands: _makeIndividualBands(),
+        individualBands: makeIndividualBands(),
         readiness: readiness,
       );
 
@@ -223,8 +281,11 @@ void main() {
     });
 
     test('hybrid bands are between population and individual', () {
-      final indBands = _makeIndividualBands(
-        a: 50.0, b: -0.04, c: 0.2, residualStdDev: 0.2,
+      final indBands = makeIndividualBands(
+        a: 50.0,
+        b: -0.04,
+        c: 0.2,
+        residualStdDev: 0.2,
       );
       final readiness = evaluateIndividualReadiness(
         intensities: List.generate(10, (i) => 50.0 + i * 5.0),
@@ -258,8 +319,8 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
   group('resolveNomogramBands — individual mode', () {
     test('uses individual bands when fully ready', () {
-      final indBands = _makeIndividualBands();
-      final readiness = _makeReadiness(isReady: true);
+      final indBands = makeIndividualBands();
+      final readiness = makeReadiness(isReady: true);
 
       final result = resolveNomogramBands(
         intensityPercent: 70.0,
@@ -275,7 +336,7 @@ void main() {
     });
 
     test('falls back to hybrid when not ready but has some data', () {
-      final indBands = _makeIndividualBands();
+      final indBands = makeIndividualBands();
       // 9 sessions: hybridWeight = 0.7
       final readiness = evaluateIndividualReadiness(
         intensities: List.generate(9, (i) => 50.0 + i * 5.0),
@@ -306,7 +367,7 @@ void main() {
         intensityPercent: 70.0,
         requestedMode: NomogramMode.individual,
         populationPreset: PopulationNomogramSource.excelOperational,
-        individualBands: _makeIndividualBands(),
+        individualBands: makeIndividualBands(),
         readiness: readiness,
       );
 
@@ -329,10 +390,13 @@ void main() {
   group('resolveNomogramBands — minimum band width enforcement', () {
     test('narrow individual bands are widened to 50% of population width', () {
       // Very small residualStdDev → very narrow individual bands
-      final indBands = _makeIndividualBands(
-        a: 10.0, b: -0.03, c: 0.15, residualStdDev: 0.01,
+      final indBands = makeIndividualBands(
+        a: 10.0,
+        b: -0.03,
+        c: 0.15,
+        residualStdDev: 0.01,
       );
-      final readiness = _makeReadiness(isReady: true);
+      final readiness = makeReadiness(isReady: true);
 
       final result = resolveNomogramBands(
         intensityPercent: 70.0,
@@ -355,6 +419,23 @@ void main() {
 
   // ═══════════════════════════════════════════════════════════════════════════
   group('resolveNomogramBands — extrapolation', () {
+    test(
+      'population band evaluation exposes structured extrapolation flag',
+      () {
+        final lowBands = evaluatePopulationNomogramBands(
+          40.0,
+          source: PopulationNomogramSource.excelOperational,
+        );
+        final inRangeBands = evaluatePopulationNomogramBands(
+          80.0,
+          source: PopulationNomogramSource.excelOperational,
+        );
+
+        expect(lowBands.isExtrapolated, true);
+        expect(inRangeBands.isExtrapolated, false);
+      },
+    );
+
     test('extrapolated flag set for out-of-range intensity', () {
       final result = resolveNomogramBands(
         intensityPercent: 40.0, // below excel_operational 60% min
@@ -391,6 +472,28 @@ void main() {
       expect(curve.length, 31); // steps + 1
     });
 
+    test('steps <= 0 returns a single point without division by zero', () {
+      final zeroStepCurve = resolveNomogramBandCurve(
+        startIntensity: 40.0,
+        endIntensity: 100.0,
+        steps: 0,
+        requestedMode: NomogramMode.population,
+        populationPreset: PopulationNomogramSource.excelOperational,
+      );
+      final negativeStepCurve = resolveNomogramBandCurve(
+        startIntensity: 45.0,
+        endIntensity: 100.0,
+        steps: -3,
+        requestedMode: NomogramMode.population,
+        populationPreset: PopulationNomogramSource.excelOperational,
+      );
+
+      expect(zeroStepCurve, hasLength(1));
+      expect(zeroStepCurve.single.intensityPercent, 40.0);
+      expect(negativeStepCurve, hasLength(1));
+      expect(negativeStepCurve.single.intensityPercent, 45.0);
+    });
+
     test('all points have valid band values', () {
       final curve = resolveNomogramBandCurve(
         startIntensity: 50.0,
@@ -407,20 +510,23 @@ void main() {
       }
     });
 
-    test('band values are monotonically decreasing with increasing intensity', () {
-      final curve = resolveNomogramBandCurve(
-        startIntensity: 60.0,
-        endIntensity: 100.0,
-        steps: 20,
-        requestedMode: NomogramMode.population,
-        populationPreset: PopulationNomogramSource.excelOperational,
-      );
+    test(
+      'band values are monotonically decreasing with increasing intensity',
+      () {
+        final curve = resolveNomogramBandCurve(
+          startIntensity: 60.0,
+          endIntensity: 100.0,
+          steps: 20,
+          requestedMode: NomogramMode.population,
+          populationPreset: PopulationNomogramSource.excelOperational,
+        );
 
-      for (int i = 1; i < curve.length; i++) {
-        // Mean should be monotonically non-increasing
-        expect(curve[i].mean, lessThanOrEqualTo(curve[i - 1].mean + 0.001));
-      }
-    });
+        for (int i = 1; i < curve.length; i++) {
+          // Mean should be monotonically non-increasing
+          expect(curve[i].mean, lessThanOrEqualTo(curve[i - 1].mean + 0.001));
+        }
+      },
+    );
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -432,15 +538,21 @@ void main() {
           requestedMode: NomogramMode.population,
           populationPreset: PopulationNomogramSource.excelOperational,
         );
-        expect(result.lower, lessThanOrEqualTo(result.mean + 0.001),
-          reason: 'lower <= mean at $intensity%');
-        expect(result.mean, lessThanOrEqualTo(result.upper + 0.001),
-          reason: 'mean <= upper at $intensity%');
+        expect(
+          result.lower,
+          lessThanOrEqualTo(result.mean + 0.001),
+          reason: 'lower <= mean at $intensity%',
+        );
+        expect(
+          result.mean,
+          lessThanOrEqualTo(result.upper + 0.001),
+          reason: 'mean <= upper at $intensity%',
+        );
       }
     });
 
     test('lower <= mean <= upper for hybrid mode', () {
-      final indBands = _makeIndividualBands();
+      final indBands = makeIndividualBands();
       final readiness = evaluateIndividualReadiness(
         intensities: List.generate(9, (i) => 50.0 + i * 6.0),
       );
@@ -453,10 +565,16 @@ void main() {
           individualBands: indBands,
           readiness: readiness,
         );
-        expect(result.lower, lessThanOrEqualTo(result.mean + 0.001),
-          reason: 'lower <= mean at $intensity%');
-        expect(result.mean, lessThanOrEqualTo(result.upper + 0.001),
-          reason: 'mean <= upper at $intensity%');
+        expect(
+          result.lower,
+          lessThanOrEqualTo(result.mean + 0.001),
+          reason: 'lower <= mean at $intensity%',
+        );
+        expect(
+          result.mean,
+          lessThanOrEqualTo(result.upper + 0.001),
+          reason: 'mean <= upper at $intensity%',
+        );
       }
     });
   });

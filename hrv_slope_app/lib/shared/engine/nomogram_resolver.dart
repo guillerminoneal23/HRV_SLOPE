@@ -72,9 +72,21 @@ class IndividualModelBands {
   /// Standard deviation of fit residuals.
   final double residualStdDev;
 
+  /// R² of the fitted model, when available from the source fit.
+  final double? rSquared;
+
+  /// Leave-one-out cross-validation RMSE, when enough source points allow it.
+  final double? cvRmse;
+
+  /// Number of source points used to produce these bands.
+  final int? sourcePointCount;
+
   const IndividualModelBands({
     required this.params,
     required this.residualStdDev,
+    this.rSquared,
+    this.cvRmse,
+    this.sourcePointCount,
   });
 
   /// Expected slope (mean) at a given intensity.
@@ -104,12 +116,34 @@ double computeResidualStdDev(
 
   double sumSq = 0.0;
   for (final p in points) {
-    final predicted = max(kMinSlopeForInterpretation, params.evaluate(p.intensityPercent));
+    final predicted = max(
+      kMinSlopeForInterpretation,
+      params.evaluate(p.intensityPercent),
+    );
     final residual = p.slope - predicted;
     sumSq += residual * residual;
   }
   // Use n-1 (Bessel's correction) for sample std dev
   return sqrt(sumSq / (points.length - 1));
+}
+
+/// Converts a fitted individual nomogram and its source points into bands.
+///
+/// The mean curve comes from [fittedModel]. The lower/upper bands use ±1
+/// residual standard deviation from [sourcePoints]. LOO-CV RMSE is computed
+/// when enough source points are available and retained for readiness/audit
+/// consumers.
+IndividualModelBands buildIndividualModelBands({
+  required NomogramModel fittedModel,
+  required List<NomogramPoint> sourcePoints,
+}) {
+  return IndividualModelBands(
+    params: fittedModel.params,
+    residualStdDev: computeResidualStdDev(sourcePoints, fittedModel.params),
+    rSquared: fittedModel.rSquared,
+    cvRmse: computeLooCvRmse(sourcePoints),
+    sourcePointCount: sourcePoints.length,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -127,10 +161,7 @@ double? computeLooCvRmse(List<NomogramPoint> points) {
   int validFolds = 0;
 
   for (int i = 0; i < points.length; i++) {
-    final trainPoints = [
-      ...points.sublist(0, i),
-      ...points.sublist(i + 1),
-    ];
+    final trainPoints = [...points.sublist(0, i), ...points.sublist(i + 1)];
 
     try {
       final model = fitIndividualNomogram(trainPoints);
@@ -183,7 +214,7 @@ ResolvedNomogramBands resolveNomogramBands({
     source: populationPreset,
   );
   warnings.addAll(popBands.warnings);
-  final isExtrapolated = popBands.warnings.any((w) => w.contains('extrapolated'));
+  final isExtrapolated = popBands.isExtrapolated;
 
   // Population band width for minimum individual band enforcement
   final popBandWidth = popBands.expectedUpper - popBands.expectedLower;
@@ -230,7 +261,9 @@ ResolvedNomogramBands resolveNomogramBands({
     if (readiness.isReady) {
       // Full individual mode
       final indBands = _applyMinBandWidth(
-        individualBands, intensityPercent, popBandWidth,
+        individualBands,
+        intensityPercent,
+        popBandWidth,
       );
       return ResolvedNomogramBands(
         activeMode: NomogramMode.individual,
@@ -322,6 +355,18 @@ List<ResolvedNomogramBands> resolveNomogramBandCurve({
   IndividualModelBands? individualBands,
   IndividualReadiness? readiness,
 }) {
+  if (steps <= 0) {
+    return [
+      resolveNomogramBands(
+        intensityPercent: startIntensity,
+        requestedMode: requestedMode,
+        populationPreset: populationPreset,
+        individualBands: individualBands,
+        readiness: readiness,
+      ),
+    ];
+  }
+
   final dx = (endIntensity - startIntensity) / steps;
   return [
     for (var i = 0; i <= steps; i++)
@@ -352,7 +397,9 @@ ResolvedNomogramBands _buildHybridBands({
   final pw = 1.0 - w;
 
   final indBands = _applyMinBandWidth(
-    individualBands, intensityPercent, popBandWidth,
+    individualBands,
+    intensityPercent,
+    popBandWidth,
   );
 
   final blendedLower = w * indBands.lower + pw * popBands.expectedLower;
