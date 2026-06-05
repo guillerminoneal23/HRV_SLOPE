@@ -9,6 +9,8 @@ import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/shared/engine/intensity_resolver.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_resolver.dart';
 import 'package:hrv_slope_app/shared/engine/statistics.dart';
 
 const int kLongitudinalShortWindow = 7;
@@ -130,6 +132,13 @@ class LongitudinalNomogramReferencePoint {
   final double? upperItlThreshold;
   final LongitudinalRecoveryZone zone;
   final String source;
+  final NomogramMode requestedMode;
+  final NomogramMode activeMode;
+  final double athleteWeightPercent;
+  final double populationWeightPercent;
+  final bool isExtrapolated;
+  final List<ReadinessGap> readinessGaps;
+  final List<String> warnings;
   final String? unavailableReason;
 
   const LongitudinalNomogramReferencePoint({
@@ -148,6 +157,13 @@ class LongitudinalNomogramReferencePoint {
     this.upperItlThreshold,
     required this.zone,
     this.source = kSlopeOrellana19PresetName,
+    this.requestedMode = NomogramMode.population,
+    this.activeMode = NomogramMode.population,
+    this.athleteWeightPercent = 0.0,
+    this.populationWeightPercent = 100.0,
+    this.isExtrapolated = false,
+    this.readinessGaps = const [],
+    this.warnings = const [],
     this.unavailableReason,
   });
 
@@ -156,10 +172,24 @@ class LongitudinalNomogramReferencePoint {
 
 class LongitudinalNomogramReferenceSeries {
   final String source;
+  final NomogramMode requestedMode;
+  final NomogramMode activeMode;
+  final double athleteWeightPercent;
+  final double populationWeightPercent;
+  final bool hasExtrapolatedPoints;
+  final List<ReadinessGap> readinessGaps;
+  final List<String> warnings;
   final List<LongitudinalNomogramReferencePoint> points;
 
   const LongitudinalNomogramReferenceSeries({
     this.source = kSlopeOrellana19PresetName,
+    this.requestedMode = NomogramMode.population,
+    this.activeMode = NomogramMode.population,
+    this.athleteWeightPercent = 0.0,
+    this.populationWeightPercent = 100.0,
+    this.hasExtrapolatedPoints = false,
+    this.readinessGaps = const [],
+    this.warnings = const [],
     this.points = const [],
   });
 
@@ -803,13 +833,30 @@ LongitudinalSeries buildLongitudinalSeries({
   required List<SessionDetail> details,
   PopulationNomogramSource nomogramPreset =
       PopulationNomogramSource.excelOperational,
+  NomogramMode requestedNomogramMode = NomogramMode.population,
+  IndividualModelBands? individualModelBands,
+  IndividualReadiness? individualReadiness,
   LongitudinalDashboardFilter filter = const LongitudinalDashboardFilter(),
 }) {
   final sorted = List<SessionDetail>.from(details)
     ..sort((a, b) => a.session.date.compareTo(b.session.date));
+  final individualModel = _resolveIndividualModelForLongitudinal(
+    athlete: athlete,
+    details: sorted,
+    providedBands: individualModelBands,
+    providedReadiness: individualReadiness,
+    shouldResolve: requestedNomogramMode != NomogramMode.population,
+  );
 
   final allPoints = sorted
-      .map((detail) => _pointFromDetail(detail, nomogramPreset))
+      .map(
+        (detail) => _pointFromDetail(
+          detail,
+          nomogramPreset,
+          requestedNomogramMode: requestedNomogramMode,
+          individualModel: individualModel,
+        ),
+      )
       .toList();
   final options = _filterOptions(allPoints);
   final activeLabels = filter.activeFilterLabels();
@@ -863,7 +910,8 @@ LongitudinalSeries buildLongitudinalSeries({
     filter: filter,
     filterOptions: options,
     completeness: _completeness(points, allPoints.length),
-    nomogramReferenceSeries: LongitudinalNomogramReferenceSeries(
+    nomogramReferenceSeries: _referenceSeriesFromPoints(
+      requestedNomogramMode: requestedNomogramMode,
       points: List.unmodifiable(points.map((p) => p.nomogramReference)),
     ),
     rpeSlopeQuadrantData: buildRpeSlopeQuadrantData(points),
@@ -875,10 +923,126 @@ LongitudinalSeries buildLongitudinalSeries({
   );
 }
 
+class _LongitudinalIndividualModel {
+  final IndividualModelBands? bands;
+  final IndividualReadiness? readiness;
+  final List<String> warnings;
+
+  const _LongitudinalIndividualModel({
+    required this.bands,
+    required this.readiness,
+    required this.warnings,
+  });
+}
+
+_LongitudinalIndividualModel _resolveIndividualModelForLongitudinal({
+  required Athlete athlete,
+  required List<SessionDetail> details,
+  required IndividualModelBands? providedBands,
+  required IndividualReadiness? providedReadiness,
+  required bool shouldResolve,
+}) {
+  if (!shouldResolve) {
+    return const _LongitudinalIndividualModel(
+      bands: null,
+      readiness: null,
+      warnings: [],
+    );
+  }
+
+  final sourcePoints = _individualSourcePoints(
+    athlete: athlete,
+    details: details,
+  );
+  final warnings = <String>[];
+  var bands = providedBands;
+  var readiness = providedReadiness;
+
+  if (bands == null && sourcePoints.length >= 3) {
+    try {
+      final fittedModel = fitIndividualNomogram(sourcePoints);
+      bands = buildIndividualModelBands(
+        fittedModel: fittedModel,
+        sourcePoints: sourcePoints,
+      );
+    } catch (error) {
+      warnings.add(
+        'Individual model unavailable for longitudinal report: $error',
+      );
+    }
+  }
+
+  readiness ??= evaluateIndividualReadiness(
+    intensities: sourcePoints.map((point) => point.intensityPercent).toList(),
+    rSquared: bands?.rSquared,
+    cvRmse: bands?.cvRmse,
+  );
+
+  return _LongitudinalIndividualModel(
+    bands: bands,
+    readiness: readiness,
+    warnings: List.unmodifiable(warnings),
+  );
+}
+
+List<NomogramPoint> _individualSourcePoints({
+  required Athlete athlete,
+  required List<SessionDetail> details,
+}) {
+  final bySessionId = <int, SessionDetail>{
+    for (final detail in details)
+      if (detail.athlete.id == athlete.id) detail.session.id: detail,
+  };
+  final points = <NomogramPoint>[];
+
+  for (final detail in bySessionId.values) {
+    final session = detail.session;
+    final intensity = session.intensityPercent;
+    final slope = session.slopeInterpreted;
+    if (session.isDraft ||
+        intensity == null ||
+        slope == null ||
+        !intensity.isFinite ||
+        !slope.isFinite ||
+        intensity <= 0 ||
+        slope <= 0) {
+      continue;
+    }
+    points.add(NomogramPoint(intensityPercent: intensity, slope: slope));
+  }
+
+  return List.unmodifiable(points);
+}
+
+LongitudinalNomogramReferenceSeries _referenceSeriesFromPoints({
+  required NomogramMode requestedNomogramMode,
+  required List<LongitudinalNomogramReferencePoint> points,
+}) {
+  final available = points.where((point) => point.isAvailable).toList();
+  final representative = available.isEmpty ? null : available.last;
+  return LongitudinalNomogramReferenceSeries(
+    source: representative?.source ?? kSlopeOrellana19PresetName,
+    requestedMode: requestedNomogramMode,
+    activeMode: representative?.activeMode ?? NomogramMode.population,
+    athleteWeightPercent: representative?.athleteWeightPercent ?? 0.0,
+    populationWeightPercent: representative?.populationWeightPercent ?? 100.0,
+    hasExtrapolatedPoints: points.any((point) => point.isExtrapolated),
+    readinessGaps: List.unmodifiable(
+      representative?.readinessGaps ?? const <ReadinessGap>[],
+    ),
+    warnings: List.unmodifiable(
+      _uniqueStrings(points.expand((point) => point.warnings)),
+    ),
+    points: points,
+  );
+}
+
 LongitudinalPoint _pointFromDetail(
   SessionDetail detail,
-  PopulationNomogramSource preset,
-) {
+  PopulationNomogramSource preset, {
+  required NomogramMode requestedNomogramMode,
+  required _LongitudinalIndividualModel individualModel,
+}) {
   final session = detail.session;
   final warnings = <String>[];
 
@@ -893,16 +1057,6 @@ LongitudinalPoint _pointFromDetail(
   }
 
   NomogramClassificationResult? classification;
-  if (!session.isDraft &&
-      session.intensityPercent != null &&
-      session.slopeInterpreted != null) {
-    classification = classifySlopeWithPopulationNomogram(
-      session.intensityPercent!,
-      session.slopeInterpreted!,
-      source: preset,
-    );
-    warnings.addAll(classification.warnings);
-  }
 
   final internal = detail.variablesByCategory('internal');
   final external = detail.variablesByCategory('external');
@@ -913,7 +1067,10 @@ LongitudinalPoint _pointFromDetail(
   final primaryIntensityMetric = primaryIntensityMetricFromMethod(
     session.intensitySource,
   );
-  final nomogramReference = buildSlopeOrellana19LongitudinalReference(
+  final referencePreset = requestedNomogramMode == NomogramMode.population
+      ? PopulationNomogramSource.slopeOrellana19
+      : preset;
+  final referenceResult = _buildResolvedLongitudinalReference(
     sessionId: session.id,
     date: session.date,
     primaryIntensityValue: session.intensityPercent,
@@ -921,7 +1078,15 @@ LongitudinalPoint _pointFromDetail(
     intensitySourceForSlope: sourceLabel,
     observedSlope: session.slopeInterpreted,
     observedItl: session.itlIndex,
+    requestedMode: requestedNomogramMode,
+    populationPreset: referencePreset,
+    individualBands: individualModel.bands,
+    readiness: individualModel.readiness,
+    modelWarnings: individualModel.warnings,
   );
+  final nomogramReference = referenceResult.point;
+  classification = referenceResult.classification;
+  warnings.addAll(nomogramReference.warnings);
 
   return LongitudinalPoint(
     sessionId: session.id,
@@ -971,60 +1136,159 @@ LongitudinalNomogramReferencePoint buildSlopeOrellana19LongitudinalReference({
   required String intensitySourceForSlope,
   required double? observedSlope,
   required double? observedItl,
+  NomogramMode requestedMode = NomogramMode.population,
+  IndividualModelBands? individualBands,
+  IndividualReadiness? readiness,
 }) {
-  if (!_isInformativeIntensity(primaryIntensityValue)) {
-    return LongitudinalNomogramReferencePoint(
-      sessionId: sessionId,
-      date: date,
-      primaryIntensityValue: primaryIntensityValue,
-      primaryIntensityMetric: primaryIntensityMetric,
-      intensitySourceForSlope: intensitySourceForSlope,
-      observedSlope: observedSlope,
-      observedItl: observedItl,
-      zone: LongitudinalRecoveryZone.unavailable,
-      unavailableReason: 'missing primary intensity',
-    );
-  }
-  if (!_isPositiveFinite(observedSlope)) {
-    return LongitudinalNomogramReferencePoint(
-      sessionId: sessionId,
-      date: date,
-      primaryIntensityValue: primaryIntensityValue,
-      primaryIntensityMetric: primaryIntensityMetric,
-      intensitySourceForSlope: intensitySourceForSlope,
-      observedSlope: observedSlope,
-      observedItl: observedItl,
-      zone: LongitudinalRecoveryZone.unavailable,
-      unavailableReason: 'missing slope',
-    );
-  }
-
-  final classification = classifySlopeWithPopulationNomogram(
-    primaryIntensityValue!,
-    observedSlope!,
-    source: PopulationNomogramSource.slopeOrellana19,
-  );
-  final lowerSlope = classification.expectedLower;
-  final referenceSlope = classification.expectedMean;
-  final upperSlope = classification.expectedUpper;
-
-  return LongitudinalNomogramReferencePoint(
+  return _buildResolvedLongitudinalReference(
     sessionId: sessionId,
     date: date,
     primaryIntensityValue: primaryIntensityValue,
     primaryIntensityMetric: primaryIntensityMetric,
     intensitySourceForSlope: intensitySourceForSlope,
-    observedSlope: classification.observedSlope,
+    observedSlope: observedSlope,
     observedItl: observedItl,
-    referenceSlope: referenceSlope,
-    lowerSlopeThreshold: lowerSlope,
-    upperSlopeThreshold: upperSlope,
-    referenceItl: _itlFromSlope(referenceSlope),
-    lowerItlThreshold: _itlFromSlope(upperSlope),
-    upperItlThreshold: _itlFromSlope(lowerSlope),
-    zone: _recoveryZoneFromClassification(classification.classification),
-    source: classification.presetName ?? kSlopeOrellana19PresetName,
+    requestedMode: requestedMode,
+    populationPreset: PopulationNomogramSource.slopeOrellana19,
+    individualBands: individualBands,
+    readiness: readiness,
+  ).point;
+}
+
+({
+  LongitudinalNomogramReferencePoint point,
+  NomogramClassificationResult? classification,
+})
+_buildResolvedLongitudinalReference({
+  required int sessionId,
+  required String date,
+  required double? primaryIntensityValue,
+  required String? primaryIntensityMetric,
+  required String intensitySourceForSlope,
+  required double? observedSlope,
+  required double? observedItl,
+  required NomogramMode requestedMode,
+  required PopulationNomogramSource populationPreset,
+  IndividualModelBands? individualBands,
+  IndividualReadiness? readiness,
+  List<String> modelWarnings = const [],
+}) {
+  if (!_isInformativeIntensity(primaryIntensityValue)) {
+    return (
+      point: LongitudinalNomogramReferencePoint(
+        sessionId: sessionId,
+        date: date,
+        primaryIntensityValue: primaryIntensityValue,
+        primaryIntensityMetric: primaryIntensityMetric,
+        intensitySourceForSlope: intensitySourceForSlope,
+        observedSlope: observedSlope,
+        observedItl: observedItl,
+        requestedMode: requestedMode,
+        warnings: List.unmodifiable(_uniqueStrings(modelWarnings)),
+        zone: LongitudinalRecoveryZone.unavailable,
+        unavailableReason: 'missing primary intensity',
+      ),
+      classification: null,
+    );
+  }
+  if (!_isPositiveFinite(observedSlope)) {
+    return (
+      point: LongitudinalNomogramReferencePoint(
+        sessionId: sessionId,
+        date: date,
+        primaryIntensityValue: primaryIntensityValue,
+        primaryIntensityMetric: primaryIntensityMetric,
+        intensitySourceForSlope: intensitySourceForSlope,
+        observedSlope: observedSlope,
+        observedItl: observedItl,
+        requestedMode: requestedMode,
+        warnings: List.unmodifiable(_uniqueStrings(modelWarnings)),
+        zone: LongitudinalRecoveryZone.unavailable,
+        unavailableReason: 'missing slope',
+      ),
+      classification: null,
+    );
+  }
+
+  final resolvedBands = resolveNomogramBands(
+    intensityPercent: primaryIntensityValue!,
+    requestedMode: requestedMode,
+    populationPreset: populationPreset,
+    individualBands: individualBands,
+    readiness: readiness,
   );
+  final classification = classifySlopeAgainstBands(
+    modelSource: resolvedBands.source,
+    presetName: populationPreset.presetName,
+    intensityPercent: primaryIntensityValue,
+    observedSlope: observedSlope!,
+    expectedLower: resolvedBands.lower,
+    expectedMean: resolvedBands.mean,
+    expectedUpper: resolvedBands.upper,
+    warnings: resolvedBands.warnings,
+  );
+  final lowerSlope = classification.expectedLower;
+  final referenceSlope = classification.expectedMean;
+  final upperSlope = classification.expectedUpper;
+  final readinessGaps =
+      requestedMode == NomogramMode.individual &&
+          resolvedBands.activeMode != NomogramMode.individual
+      ? readiness?.gaps ?? const <ReadinessGap>[]
+      : const <ReadinessGap>[];
+
+  return (
+    point: LongitudinalNomogramReferencePoint(
+      sessionId: sessionId,
+      date: date,
+      primaryIntensityValue: primaryIntensityValue,
+      primaryIntensityMetric: primaryIntensityMetric,
+      intensitySourceForSlope: intensitySourceForSlope,
+      observedSlope: classification.observedSlope,
+      observedItl: observedItl,
+      referenceSlope: referenceSlope,
+      lowerSlopeThreshold: lowerSlope,
+      upperSlopeThreshold: upperSlope,
+      referenceItl: _itlFromSlope(referenceSlope),
+      lowerItlThreshold: _itlFromSlope(upperSlope),
+      upperItlThreshold: _itlFromSlope(lowerSlope),
+      zone: _recoveryZoneFromClassification(classification.classification),
+      source: _sourceLabel(resolvedBands.source, populationPreset),
+      requestedMode: requestedMode,
+      activeMode: resolvedBands.activeMode,
+      athleteWeightPercent: resolvedBands.athleteWeightPercent,
+      populationWeightPercent: resolvedBands.populationWeightPercent,
+      isExtrapolated: resolvedBands.isExtrapolated,
+      readinessGaps: List.unmodifiable(readinessGaps),
+      warnings: List.unmodifiable(
+        _uniqueStrings([...modelWarnings, ...classification.warnings]),
+      ),
+    ),
+    classification: classification,
+  );
+}
+
+String _sourceLabel(
+  NomogramModelSource source,
+  PopulationNomogramSource populationPreset,
+) {
+  switch (source) {
+    case NomogramModelSource.slopeOrellana19:
+    case NomogramModelSource.excelOperational:
+      return populationPreset.presetName;
+    case NomogramModelSource.individual:
+      return NomogramMode.individual.key;
+    case NomogramModelSource.hybrid:
+      return NomogramMode.hybrid.key;
+  }
+}
+
+List<String> _uniqueStrings(Iterable<String> values) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final value in values) {
+    if (seen.add(value)) result.add(value);
+  }
+  return result;
 }
 
 RpeSlopeQuadrantData buildRpeSlopeQuadrantData(
