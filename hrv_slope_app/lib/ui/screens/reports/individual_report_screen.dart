@@ -10,6 +10,7 @@ import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
 import 'package:hrv_slope_app/shared/engine/individual_report_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/nomogram_chart.dart';
 
@@ -30,6 +31,7 @@ class IndividualReportScreen extends StatefulWidget {
 class _IndividualReportScreenState extends State<IndividualReportScreen> {
   IndividualReportData? _report;
   int? _athleteId;
+  NomogramMode _selectedNomogramMode = NomogramMode.population;
   bool _loading = true;
   String? _error;
 
@@ -40,6 +42,13 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
   }
 
   Future<void> _load() async {
+    if (mounted && !_loading) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+
     try {
       final detail = await widget.database.sessionsDao.getSessionDetail(
         widget.sessionId,
@@ -48,6 +57,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         if (mounted) {
           setState(() {
             _error = 'Session not found';
+            _report = null;
             _loading = false;
           });
         }
@@ -59,10 +69,14 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         'nomogram_preset',
       );
       final preset = parsePopulationNomogramSource(presetName);
+      final athleteHistory = await widget.database.sessionsDao
+          .getSessionDetailsForAthlete(detail.athlete.id);
 
       final report = buildIndividualReport(
         detail: detail,
         nomogramPreset: preset,
+        requestedNomogramMode: _selectedNomogramMode,
+        athleteHistory: athleteHistory,
       );
 
       if (mounted) {
@@ -76,6 +90,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
       if (mounted) {
         setState(() {
           _error = e.toString();
+          _report = null;
           _loading = false;
         });
       }
@@ -116,6 +131,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         children: [
           _buildHeader(r),
           if (r.warnings.isNotEmpty) _buildWarnings(r.warnings),
+          _buildNomogramModeSelector(),
           _buildExternalLoad(r),
           _buildInternalLoad(r),
           _buildHrvSection(r),
@@ -124,6 +140,43 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
           const SizedBox(height: 32),
         ],
       ),
+    );
+  }
+
+  Widget _buildNomogramModeSelector() {
+    return _card(
+      'Nomogram Model',
+      icon: Icons.tune,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SegmentedButton<NomogramMode>(
+            segments: const [
+              ButtonSegment(
+                value: NomogramMode.population,
+                label: Text('Study model'),
+              ),
+              ButtonSegment(
+                value: NomogramMode.hybrid,
+                label: Text('Hybrid model'),
+              ),
+              ButtonSegment(
+                value: NomogramMode.individual,
+                label: Text('Individual model'),
+              ),
+            ],
+            selected: {_selectedNomogramMode},
+            onSelectionChanged: (selection) {
+              final mode = selection.first;
+              if (mode == _selectedNomogramMode) return;
+              setState(() {
+                _selectedNomogramMode = mode;
+              });
+              _load();
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -310,22 +363,58 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
             style: TextStyle(color: AppColors.warning),
           )
         else ...[
-          _slopeValueRow('Raw slope', s.rawSlope, 4),
-          _slopeValueRow('Interpreted slope', s.interpretedSlope, 4),
-          _slopeValueRow('ITL index', s.itlIndex, 4),
+          _slopeValueRow(
+            'Raw slope',
+            s.rawSlope,
+            4,
+            help:
+                'Original RMSSD-Slope value calculated or entered for the session.',
+          ),
+          _slopeValueRow(
+            'Interpreted slope',
+            s.interpretedSlope,
+            4,
+            help:
+                'Slope value used for interpretation after applying the app rules.',
+          ),
+          _slopeValueRow(
+            'ITL index',
+            s.itlIndex,
+            4,
+            help:
+                'Internal training load index used to contextualize the session response.',
+          ),
           _row(
             'Intensity %',
             s.intensityPercent != null
                 ? '${s.intensityPercent!.toStringAsFixed(1)}%'
                 : 'Not available',
+            help: 'Session intensity used to query the nomogram reference.',
           ),
-          _row('Intensity source', s.intensitySourceForSlope),
+          _row(
+            'Intensity source',
+            s.intensitySourceForSlope,
+            help:
+                'Whether intensity came from external intensity, internal fallback, or another available source.',
+          ),
           _row('Primary intensity metric', s.primaryIntensityMetric),
           if (n != null) ...[
             const Divider(height: 20),
-            _row('Residual', n.residual.toStringAsFixed(4)),
-            _row('Residual %', '${n.residualPercent.toStringAsFixed(1)}%'),
-            _classificationChip(n.classification, n.classificationLabel),
+            _row(
+              'Residual',
+              n.residual.toStringAsFixed(4),
+              help: 'Difference between observed slope and expected mean.',
+            ),
+            _row(
+              'Residual %',
+              '${n.residualPercent.toStringAsFixed(1)}%',
+              help: 'Residual expressed relative to the expected mean.',
+            ),
+            _classificationChip(
+              n.classification,
+              n.classificationLabel,
+              help: 'Classification based on the selected model bands.',
+            ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
@@ -349,48 +438,124 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
     );
   }
 
-  // ── Section 7: Population Nomogram Chart ──
+  // ── Section 7: Nomogram Chart ──
 
   Widget _buildNomogramSection(IndividualReportData r) {
     final n = r.nomogramSummary;
 
-    return _card(
-      'Population Nomogram',
-      icon: Icons.auto_graph,
-      children: [
-        if (!r.canShowNomogram) ...[
-          const Text(
+    if (!r.canShowNomogram || n == null) {
+      return _card(
+        'Nomogram Reference',
+        icon: Icons.auto_graph,
+        children: const [
+          Text(
             'Intensity percent is required for nomogram placement.',
             style: TextStyle(color: AppColors.textHint),
           ),
-        ] else ...[
-          _row('Preset', n!.presetName),
-          _row('Expected lower', n.expectedLower.toStringAsFixed(3)),
-          _row('Expected mean', n.expectedMean.toStringAsFixed(3)),
-          _row('Expected upper', n.expectedUpper.toStringAsFixed(3)),
-          _row('Observed slope', n.observedSlope.toStringAsFixed(3)),
-          _row('Response', n.classificationLabel),
-          if (n.warnings.isNotEmpty)
-            for (final w in n.warnings)
+        ],
+      );
+    }
+
+    return _card(
+      'Nomogram Reference',
+      icon: Icons.auto_graph,
+      children: [
+        _buildNomogramModelMetadata(n),
+        const Divider(height: 20),
+        _row('Preset', n.presetName),
+        _row(
+          'Expected lower',
+          n.expectedLower.toStringAsFixed(3),
+          help: 'Lower reference band limit for the selected model.',
+        ),
+        _row(
+          'Expected mean',
+          n.expectedMean.toStringAsFixed(3),
+          help: 'Expected RMSSD-Slope for this intensity and selected model.',
+        ),
+        _row(
+          'Expected upper',
+          n.expectedUpper.toStringAsFixed(3),
+          help: 'Upper reference band limit for the selected model.',
+        ),
+        _row('Observed slope', n.observedSlope.toStringAsFixed(3)),
+        _row(
+          'Response',
+          n.classificationLabel,
+          help: 'Classification based on the selected model bands.',
+        ),
+        if (n.activeMode != NomogramMode.population)
+          _infoChip(
+            'Chart background shows the study reference; values above use the active model.',
+          ),
+        const SizedBox(height: 16),
+        // The chart
+        NomogramChart(
+          preset: parsePopulationNomogramSource(n.presetName),
+          observedIntensity: n.intensityPercent,
+          observedSlope: n.observedSlope,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNomogramModelMetadata(NomogramReportSummary n) {
+    final notes = _modelNotes(n);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _row(
+            'Requested model',
+            _modeLabel(n.requestedMode),
+            help: 'Model selected for this report calculation.',
+          ),
+          _row(
+            'Active model',
+            _modeLabel(n.activeMode),
+            help: 'Model actually used after readiness and fallback rules.',
+          ),
+          _row(
+            'Blend',
+            '${n.athleteWeightPercent.toStringAsFixed(0)}% athlete / '
+                '${n.populationWeightPercent.toStringAsFixed(0)}% study',
+          ),
+          if (n.requestedMode != n.activeMode)
+            _infoChip(_fallbackMessage(n.requestedMode, n.activeMode)),
+          if (n.isExtrapolated)
+            _infoChip(
+              'Estimated zone: intensity is outside the validated reference range.',
+            ),
+          if (notes.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            for (final note in notes) _infoChip(note),
+          ],
+          if (n.readinessGaps.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Individual model not available yet:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 3),
+            for (final gap in n.readinessGaps)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: 2),
                 child: Text(
-                  '⚠ $w',
+                  '• ${gap.criterion}: ${gap.currentValue}; required ${gap.requiredValue}.',
                   style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.warning,
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ),
-          const SizedBox(height: 16),
-          // The chart
-          NomogramChart(
-            preset: parsePopulationNomogramSource(n.presetName),
-            observedIntensity: n.intensityPercent,
-            observedSlope: n.observedSlope,
-          ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -431,22 +596,13 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
     );
   }
 
-  Widget _row(String label, String? value) {
+  Widget _row(String label, String? value, {String? help}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-              ),
-            ),
-          ),
+          SizedBox(width: 140, child: _labelWithTooltip(label, help)),
           Expanded(
             child: Text(
               value == null || value.isEmpty ? '–' : value,
@@ -455,6 +611,29 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _labelWithTooltip(String label, String? help) {
+    final text = Text(
+      label,
+      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+    );
+    if (help == null) return text;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: text),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: help,
+          child: const Icon(
+            Icons.help_outline,
+            size: 14,
+            color: AppColors.textHint,
+          ),
+        ),
+      ],
     );
   }
 
@@ -499,30 +678,44 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
     );
   }
 
-  Widget _slopeValueRow(String label, double? value, int digits) {
-    return _row(label, value != null ? value.toStringAsFixed(digits) : '–');
+  Widget _slopeValueRow(
+    String label,
+    double? value,
+    int digits, {
+    String? help,
+  }) {
+    return _row(
+      label,
+      value != null ? value.toStringAsFixed(digits) : '–',
+      help: help,
+    );
   }
 
-  Widget _classificationChip(InternalLoadClassification c, String label) {
+  Widget _classificationChip(
+    InternalLoadClassification c,
+    String label, {
+    String? help,
+  }) {
     final color = _classColor(c);
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.5)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: color,
         ),
       ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: help == null ? chip : Tooltip(message: help, child: chip),
     );
   }
 
@@ -576,6 +769,32 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
   String? _ms(double? value) =>
       value == null ? null : '${value.toStringAsFixed(2)} ms';
 
+  String _modeLabel(NomogramMode mode) {
+    switch (mode) {
+      case NomogramMode.population:
+        return 'Study model';
+      case NomogramMode.hybrid:
+        return 'Hybrid model';
+      case NomogramMode.individual:
+        return 'Individual model';
+    }
+  }
+
+  String _fallbackMessage(NomogramMode requested, NomogramMode active) {
+    return 'Requested ${_modeLabel(requested).toLowerCase()} is not available yet. '
+        'Using ${_modeLabel(active).toLowerCase()}.';
+  }
+
+  List<String> _modelNotes(NomogramReportSummary n) {
+    final seen = <String>{};
+    final notes = <String>[];
+    for (final warning in n.warnings) {
+      if (n.isExtrapolated && warning.contains('extrapolated')) continue;
+      if (seen.add(warning)) notes.add(warning);
+    }
+    return notes;
+  }
+
   Future<void> _exportCsv() async {
     final report = _report;
     if (report == null) return;
@@ -599,7 +818,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         content: const Text(
           'This report uses the RMSSD-Slope method (Naranjo Orellana et al., '
           '2019) to evaluate autonomic recovery from exercise.\n\n'
-          'Recovery response is based on comparison to population reference bands. '
+          'Recovery response is based on comparison to the selected nomogram model. '
           'Results should be interpreted in context of the athlete\'s training '
           'history and external factors.\n\n'
           'This tool provides training insights and is not a medical '

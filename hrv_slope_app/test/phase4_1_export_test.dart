@@ -13,6 +13,7 @@ import 'package:hrv_slope_app/shared/engine/individual_nomogram_builder.dart';
 import 'package:hrv_slope_app/shared/engine/individual_report_builder.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/ui/screens/longitudinal/athlete_longitudinal_screen.dart';
 import 'package:hrv_slope_app/ui/screens/nomogram/individual_nomogram_screen.dart';
 import 'package:hrv_slope_app/ui/screens/reports/group_report_screen.dart';
@@ -382,6 +383,139 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byTooltip('Export CSV'), findsOneWidget);
+    });
+
+    testWidgets('individual report shows nomogram model selector', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualReportScreen(database: db, sessionId: sessionId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SegmentedButton<NomogramMode>), findsOneWidget);
+      expect(find.text('Study model'), findsWidgets);
+      expect(find.text('Hybrid model'), findsOneWidget);
+      expect(find.text('Individual model'), findsOneWidget);
+    });
+
+    testWidgets('changing selector requests hybrid mode and shows fallback', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualReportScreen(database: db, sessionId: sessionId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Hybrid model'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Requested model'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Requested model'), findsWidgets);
+      expect(find.text('Hybrid model'), findsWidgets);
+      expect(
+        find.text(
+          'Requested hybrid model is not available yet. Using study model.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('individual unavailable shows readiness helper text', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualReportScreen(database: db, sessionId: sessionId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Individual model'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Individual model not available yet:'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Individual model not available yet:'), findsOneWidget);
+      expect(find.textContaining('Valid sessions:'), findsOneWidget);
+    });
+
+    testWidgets('extrapolated individual report displays model warning', (
+      tester,
+    ) async {
+      final seed = await _seedSession(db, intensity: 35, slope: 1);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualReportScreen(database: db, sessionId: seed.$2),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text(
+          'Estimated zone: intensity is outside the validated reference range.',
+        ),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Estimated zone: intensity is outside the validated reference range.',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('individual report exposes metric help tooltips', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualReportScreen(database: db, sessionId: sessionId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Raw slope'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byTooltip(
+          'Original RMSSD-Slope value calculated or entered for the session.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip(
+          'Slope value used for interpretation after applying the app rules.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip(
+          'Internal training load index used to contextualize the session response.',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('group report shows Export CSV button', (tester) async {
@@ -757,7 +891,11 @@ IntensityVariable _variable(
   );
 }
 
-Future<(int, int)> _seedSession(AppDatabase db) async {
+Future<(int, int)> _seedSession(
+  AppDatabase db, {
+  double intensity = 80,
+  double slope = 0.4,
+}) async {
   final now = DateTime.now().toIso8601String();
   final athleteId = await db.athletesDao.insertAthlete(
     AthletesCompanion.insert(
@@ -775,16 +913,16 @@ Future<(int, int)> _seedSession(AppDatabase db) async {
       taskName: const drift.Value('Tempo'),
       sport: const drift.Value('Running'),
       sessionType: const drift.Value('training'),
-      intensityPercent: const drift.Value(80),
+      intensityPercent: drift.Value(intensity),
       intensitySource: const drift.Value('direct_percent_mas'),
       recoveryTimeMin: const drift.Value(10),
       recoveryWindowStartMin: const drift.Value(5),
       recoveryWindowEndMin: const drift.Value(10),
       rmssdExercise: const drift.Value(4),
-      rmssdRecovery: const drift.Value(8),
-      slopeRaw: const drift.Value(0.4),
-      slopeInterpreted: const drift.Value(0.4),
-      itlIndex: const drift.Value(2.5),
+      rmssdRecovery: drift.Value(slope * 10 + 4),
+      slopeRaw: drift.Value(slope),
+      slopeInterpreted: drift.Value(slope),
+      itlIndex: drift.Value(1 / slope),
       hrvInputMode: const drift.Value('direct_rmssd'),
       rmssdRecoverySource: const drift.Value('manual'),
       rmssdExerciseSource: const drift.Value('measured'),
