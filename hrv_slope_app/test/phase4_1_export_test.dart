@@ -409,6 +409,16 @@ void main() {
       expect(find.text('Study model'), findsWidgets);
       expect(find.text('Hybrid model'), findsOneWidget);
       expect(find.text('Individual model'), findsOneWidget);
+      expect(
+        find.byTooltip('Model selected for this report calculation.'),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip(
+          'Model actually used after readiness and fallback rules.',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('changing selector requests hybrid mode and shows fallback', (
@@ -429,6 +439,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Hybrid model'));
       await tester.pumpAndSettle();
+
+      expect(find.text('Nomogram Reference'), findsOneWidget);
+      expect(find.text('Model selection'), findsOneWidget);
+      expect(find.text('Hybrid model'), findsWidgets);
+
       await tester.scrollUntilVisible(
         find.text('Requested model'),
         300,
@@ -464,6 +479,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Individual model'));
       await tester.pumpAndSettle();
+
+      expect(find.text('Nomogram Reference'), findsOneWidget);
+      expect(find.text('Model selection'), findsOneWidget);
+      expect(find.text('Individual model'), findsWidgets);
+
       await tester.scrollUntilVisible(
         find.text('Individual model not available yet:'),
         300,
@@ -520,6 +540,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.byIcon(Icons.help_outline), findsWidgets);
       expect(
         find.byTooltip(
           'Original RMSSD-Slope value calculated or entered for the session.',

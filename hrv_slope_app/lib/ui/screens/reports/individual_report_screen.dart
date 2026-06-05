@@ -29,11 +29,14 @@ class IndividualReportScreen extends StatefulWidget {
 }
 
 class _IndividualReportScreenState extends State<IndividualReportScreen> {
+  final ScrollController _scrollController = ScrollController();
   IndividualReportData? _report;
   int? _athleteId;
   NomogramMode _selectedNomogramMode = NomogramMode.population;
   bool _loading = true;
+  bool _refreshingNomogram = false;
   String? _error;
+  String? _nomogramRefreshError;
 
   @override
   void initState() {
@@ -41,11 +44,25 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    if (mounted && !_loading) {
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool refreshNomogram = false}) async {
+    final keepCurrentReport = refreshNomogram && _report != null;
+    final requestedMode = _selectedNomogramMode;
+
+    if (mounted && (keepCurrentReport || !_loading)) {
       setState(() {
-        _loading = true;
+        if (keepCurrentReport) {
+          _refreshingNomogram = true;
+        } else {
+          _loading = true;
+        }
         _error = null;
+        _nomogramRefreshError = null;
       });
     }
 
@@ -75,23 +92,30 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
       final report = buildIndividualReport(
         detail: detail,
         nomogramPreset: preset,
-        requestedNomogramMode: _selectedNomogramMode,
+        requestedNomogramMode: requestedMode,
         athleteHistory: athleteHistory,
       );
 
       if (mounted) {
+        if (requestedMode != _selectedNomogramMode) return;
         setState(() {
           _report = report;
           _athleteId = detail.athlete.id;
           _loading = false;
+          _refreshingNomogram = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
-          _report = null;
+          if (keepCurrentReport) {
+            _nomogramRefreshError = e.toString();
+          } else {
+            _error = e.toString();
+            _report = null;
+          }
           _loading = false;
+          _refreshingNomogram = false;
         });
       }
     }
@@ -99,10 +123,10 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
+    if (_loading && _report == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (_error != null) {
+    if (_error != null && _report == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Report')),
         body: Center(child: Text(_error!)),
@@ -127,6 +151,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         ],
       ),
       body: ListView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
         children: [
           _buildHeader(r),
@@ -169,16 +194,37 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
               ),
             ],
             selected: {_selectedNomogramMode},
-            onSelectionChanged: (selection) {
-              final mode = selection.first;
-              if (mode == _selectedNomogramMode) return;
-              setState(() {
-                _selectedNomogramMode = mode;
-              });
-              _load();
-            },
+            onSelectionChanged: _refreshingNomogram
+                ? null
+                : (selection) {
+                    final mode = selection.first;
+                    if (mode == _selectedNomogramMode) return;
+                    setState(() {
+                      _selectedNomogramMode = mode;
+                    });
+                    _load(refreshNomogram: true);
+                  },
           ),
         ),
+        if (_refreshingNomogram) ...[
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Updating model...',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ],
+        if (_nomogramRefreshError != null)
+          _infoChip('Could not update model: $_nomogramRefreshError'),
       ],
     );
   }
@@ -634,10 +680,14 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         const SizedBox(width: 4),
         Tooltip(
           message: help,
-          child: const Icon(
-            Icons.help_outline,
-            size: 14,
-            color: AppColors.textHint,
+          triggerMode: TooltipTriggerMode.tap,
+          child: InkResponse(
+            radius: 14,
+            child: const Icon(
+              Icons.help_outline,
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
           ),
         ),
       ],
@@ -722,7 +772,13 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
     );
     return Padding(
       padding: const EdgeInsets.only(top: 8),
-      child: help == null ? chip : Tooltip(message: help, child: chip),
+      child: help == null
+          ? chip
+          : Tooltip(
+              message: help,
+              triggerMode: TooltipTriggerMode.tap,
+              child: chip,
+            ),
     );
   }
 
