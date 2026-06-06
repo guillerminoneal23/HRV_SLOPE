@@ -34,6 +34,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
   NomogramMode? _selectedNomogramMode;
   bool _loading = true;
   bool _refreshingNomogram = false;
+  bool _filtersExpanded = false;
   final _filterDateFromController = TextEditingController();
   final _filterDateToController = TextEditingController();
   String? _filterDateFrom;
@@ -611,131 +612,165 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
         responseOptions.toSet();
 
     return Material(
+      key: const Key('individual_nomogram_filters'),
       color: AppColors.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          ExpansionTile(
-            key: const Key('individual_nomogram_filters'),
-            initiallyExpanded: _activeFilterCount > 0,
-            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-            childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            title: Text('Filters ($_activeFilterCount)'),
-            subtitle: const Text('Filter nomogram points'),
-            children: [
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final dateFrom = TextField(
-                    controller: _filterDateFromController,
-                    decoration: const InputDecoration(
-                      labelText: 'Date from',
-                      hintText: 'YYYY-MM-DD',
-                    ),
-                  );
-                  final dateTo = TextField(
-                    controller: _filterDateToController,
-                    decoration: const InputDecoration(
-                      labelText: 'Date to',
-                      hintText: 'YYYY-MM-DD',
-                    ),
-                  );
-                  if (constraints.maxWidth >= 520) {
-                    return Row(
-                      children: [
-                        Expanded(child: dateFrom),
-                        const SizedBox(width: 8),
-                        Expanded(child: dateTo),
-                      ],
-                    );
-                  }
-                  return Column(
-                    children: [dateFrom, const SizedBox(height: 8), dateTo],
-                  );
-                },
-              ),
-              if (bounds != null && intensityRange != null) ...[
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Intensity: ${_filterNumber(intensityRange.start)}-${_filterNumber(intensityRange.end)}%',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                if (bounds.min < bounds.max)
-                  SizedBox(
-                    height: 36,
-                    child: RangeSlider(
-                      min: bounds.min,
-                      max: bounds.max,
-                      values: intensityRange,
-                      divisions: 20,
-                      onChanged: (values) =>
-                          setState(() => _pendingIntensityRange = values),
-                    ),
-                  ),
-              ],
-              if (responseOptions.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Response',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      for (final response in responseOptions)
-                        FilterChip(
-                          visualDensity: VisualDensity.compact,
-                          label: Text(response),
-                          selected: selectedResponses.contains(response),
-                          onSelected: (_) {
-                            final next = Set<String>.of(selectedResponses);
-                            next.contains(response)
-                                ? next.remove(response)
-                                : next.add(response);
-                            setState(() => _pendingResponseCategories = next);
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-              _activeFilterChips(),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+          InkWell(
+            key: const Key('individual_nomogram_filters_header'),
+            onTap: () => setState(() => _filtersExpanded = !_filtersExpanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
                 children: [
-                  if (_activeFilterCount > 0)
-                    TextButton.icon(
-                      onPressed: _resetFilters,
-                      icon: const Icon(Icons.clear, size: 16),
-                      label: const Text('Reset filters'),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Filters ($_activeFilterCount)',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Filter nomogram points',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: () => _applyFilters(data),
-                    icon: const Icon(Icons.check, size: 16),
-                    label: const Text('Apply filters'),
+                  ),
+                  Icon(
+                    _filtersExpanded ? Icons.expand_less : Icons.expand_more,
                   ),
                 ],
               ),
-            ],
+            ),
           ),
+          if (_filtersExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Column(
+                children: [
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final dateFrom = TextField(
+                        controller: _filterDateFromController,
+                        decoration: const InputDecoration(
+                          labelText: 'Date from',
+                          hintText: 'YYYY-MM-DD',
+                        ),
+                      );
+                      final dateTo = TextField(
+                        controller: _filterDateToController,
+                        decoration: const InputDecoration(
+                          labelText: 'Date to',
+                          hintText: 'YYYY-MM-DD',
+                        ),
+                      );
+                      if (constraints.maxWidth >= 520) {
+                        return Row(
+                          children: [
+                            Expanded(child: dateFrom),
+                            const SizedBox(width: 8),
+                            Expanded(child: dateTo),
+                          ],
+                        );
+                      }
+                      return Column(
+                        children: [dateFrom, const SizedBox(height: 8), dateTo],
+                      );
+                    },
+                  ),
+                  if (bounds != null && intensityRange != null) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Intensity: ${_filterNumber(intensityRange.start)}-${_filterNumber(intensityRange.end)}%',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    if (bounds.min < bounds.max)
+                      SizedBox(
+                        height: 36,
+                        child: RangeSlider(
+                          min: bounds.min,
+                          max: bounds.max,
+                          values: intensityRange,
+                          divisions: 20,
+                          onChanged: (values) =>
+                              setState(() => _pendingIntensityRange = values),
+                        ),
+                      ),
+                  ],
+                  if (responseOptions.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Response',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          for (final response in responseOptions)
+                            FilterChip(
+                              visualDensity: VisualDensity.compact,
+                              label: Text(response),
+                              selected: selectedResponses.contains(response),
+                              onSelected: (_) {
+                                final next = Set<String>.of(selectedResponses);
+                                next.contains(response)
+                                    ? next.remove(response)
+                                    : next.add(response);
+                                setState(
+                                  () => _pendingResponseCategories = next,
+                                );
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  _activeFilterChips(),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (_activeFilterCount > 0)
+                        TextButton.icon(
+                          onPressed: _resetFilters,
+                          icon: const Icon(Icons.clear, size: 16),
+                          label: const Text('Reset filters'),
+                        ),
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        onPressed: () => _applyFilters(data),
+                        icon: const Icon(Icons.check, size: 16),
+                        label: const Text('Apply filters'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
             child: Align(

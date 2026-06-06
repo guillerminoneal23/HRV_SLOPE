@@ -394,10 +394,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final filtersPanel = find.byKey(const Key('individual_nomogram_filters'));
-      final filtersHeader = find.descendant(
-        of: filtersPanel,
-        matching: find.byType(ListTile),
+      final filtersHeader = find.byKey(
+        const Key('individual_nomogram_filters_header'),
       );
       await tester.scrollUntilVisible(
         filtersHeader,
@@ -458,10 +456,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final filtersPanel = find.byKey(const Key('individual_nomogram_filters'));
-      final filtersHeader = find.descendant(
-        of: filtersPanel,
-        matching: find.byType(ListTile),
+      final filtersHeader = find.byKey(
+        const Key('individual_nomogram_filters_header'),
       );
       await tester.scrollUntilVisible(
         filtersHeader,
