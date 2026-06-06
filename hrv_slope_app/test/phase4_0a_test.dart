@@ -18,6 +18,7 @@ import 'package:hrv_slope_app/ui/screens/athletes/athlete_detail_screen.dart';
 import 'package:hrv_slope_app/ui/screens/longitudinal/athlete_longitudinal_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/longitudinal_chart.dart';
+import 'package:hrv_slope_app/ui/widgets/nomogram_chart.dart';
 import 'package:hrv_slope_app/ui/widgets/rpe_slope_quadrant_chart.dart';
 
 void main() {
@@ -1079,11 +1080,15 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await _dragUntilVisible(tester, find.text('Open report'));
+      await tester.scrollUntilVisible(
+        find.text('Open report'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
 
       expect(find.text('Open report'), findsOneWidget);
       final sessionTile = find.widgetWithText(ListTile, 'Session 1');
-      await _dragUntilVisible(tester, sessionTile);
       await tester.ensureVisible(sessionTile);
       await tester.pumpAndSettle();
       await tester.tap(sessionTile);
@@ -1165,25 +1170,36 @@ void main() {
       );
       expect(slopeChart.points.first.tooltip, isNot(contains('threshold')));
 
-      final lineChart = tester.widget<LineChart>(find.byType(LineChart).first);
+      final slopeChartFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is LongitudinalChart && widget.title == 'Slope Trend',
+      );
+      final lineChart = tester.widget<LineChart>(
+        find.descendant(of: slopeChartFinder, matching: find.byType(LineChart)),
+      );
       expect(lineChart.data.lineBarsData, hasLength(1));
       expect(lineChart.data.lineBarsData.single.color, AppColors.primary);
       expect(lineChart.data.maxY, lessThan(2));
-      expect(find.text('Lower-than-expected: 1'), findsOneWidget);
-      expect(find.text('Expected: 1'), findsOneWidget);
-      expect(find.text('Favorable: 1'), findsOneWidget);
       expect(
         find.textContaining('Lower-than-expected: below reference'),
         findsAtLeastNWidgets(1),
-      );
-      await _dragUntilVisible(
-        tester,
-        find.textContaining('Slope trend summarizes RMSSD-Slope changes'),
       );
       expect(
         find.textContaining('Slope trend summarizes RMSSD-Slope changes'),
         findsOneWidget,
       );
+      await tester.scrollUntilVisible(
+        find.text('Lower-than-expected: 1'),
+        -300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Lower-than-expected: 1'),
+        findsAtLeastNWidgets(1),
+      );
+      expect(find.textContaining('Expected: 1'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('Favorable: 1'), findsAtLeastNWidgets(1));
     });
 
     testWidgets('reference card shows nomogram model selector and metadata', (
@@ -1225,6 +1241,88 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('longitudinal_nomogram_filters')),
+        findsOneWidget,
+      );
+      expect(find.text('Showing 2 of 2 points'), findsOneWidget);
+      expect(find.text('Reset filters'), findsOneWidget);
+      expect(find.text('External load'), findsWidgets);
+      expect(find.byType(NomogramChart), findsOneWidget);
+    });
+
+    testWidgets('longitudinal nomogram filters points and resets', (
+      tester,
+    ) async {
+      final bands = evaluatePopulationNomogramBands(
+        80,
+        source: PopulationNomogramSource.slopeOrellana19,
+      );
+      await _seedSession(db, athleteId, slope: bands.expectedLower / 2);
+      await _seedSession(db, athleteId, slope: bands.expectedMean, day: 2);
+      await _seedSession(
+        db,
+        athleteId,
+        slope: bands.expectedUpper + 0.2,
+        day: 3,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('longitudinal_nomogram_point_count')),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Showing 3 of 3 points'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilterChip, 'Lower-than-expected'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(FilterChip, 'Expected'), findsOneWidget);
+      expect(find.widgetWithText(FilterChip, 'Favorable'), findsOneWidget);
+
+      final favorableChip = find.widgetWithText(FilterChip, 'Favorable');
+      await tester.scrollUntilVisible(
+        favorableChip,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(favorableChip);
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('longitudinal_nomogram_point_count')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Showing 2 of 3 points'), findsOneWidget);
+      expect(find.textContaining('Response:'), findsOneWidget);
+
+      final resetFiltersButton = find.widgetWithText(
+        TextButton,
+        'Reset filters',
+      );
+      await tester.ensureVisible(resetFiltersButton);
+      await tester.pumpAndSettle();
+      await tester.tap(resetFiltersButton);
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('longitudinal_nomogram_point_count')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Showing 3 of 3 points'), findsOneWidget);
     });
 
     testWidgets('changing longitudinal model keeps reference area visible', (
