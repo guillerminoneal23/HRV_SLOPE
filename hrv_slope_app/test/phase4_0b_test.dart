@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart' as drift;
 import 'package:drift/native.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
@@ -375,6 +376,10 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      expect(find.text('Viewport'), findsOneWidget);
+      expect(find.text('Intensity range'), findsOneWidget);
+      expect(find.text('Slope range'), findsOneWidget);
+      expect(find.text('Reset view'), findsOneWidget);
       expect(find.text('Session points'), findsOneWidget);
     });
 
@@ -395,6 +400,7 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      expect(find.text('Viewport'), findsOneWidget);
       expect(find.text('Lower band'), findsOneWidget);
       expect(find.text('Mean'), findsOneWidget);
       expect(find.text('Upper band'), findsOneWidget);
@@ -464,6 +470,48 @@ void main() {
       );
 
       expect(chart.observedPoints.length, 1);
+    });
+
+    testWidgets('nomogram point tooltip includes session metadata', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: NomogramChart(
+              preset: PopulationNomogramSource.excelOperational,
+              observedPoints: [
+                NomogramObservedPoint(
+                  xIntensityPercent: 35,
+                  ySlope: 1.2,
+                  label: 'Session 1',
+                  classification: 'expected_response',
+                  isExtrapolated: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final chart = tester.widget<LineChart>(find.byType(LineChart));
+      final pointBarIndex = chart.data.lineBarsData.length - 1;
+      final pointBar = chart.data.lineBarsData[pointBarIndex];
+      final touchedSpot = TouchLineBarSpot(
+        pointBar,
+        pointBarIndex,
+        pointBar.spots.single,
+        0,
+      );
+      final tooltip = chart.data.lineTouchData.touchTooltipData.getTooltipItems(
+        [touchedSpot],
+      ).single!;
+
+      expect(tooltip.text, contains('Session 1'));
+      expect(tooltip.text, contains('Intensity: 35.0%'));
+      expect(tooltip.text, contains('RMSSD-Slope: 1.200'));
+      expect(tooltip.text, contains('Response: Expected'));
+      expect(tooltip.text, contains('Estimated zone'));
     });
 
     test(

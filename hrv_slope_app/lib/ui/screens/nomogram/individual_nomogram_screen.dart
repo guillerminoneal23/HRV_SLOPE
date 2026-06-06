@@ -291,6 +291,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
           classification: point.classification,
           sessionId: point.sessionId,
           athleteName: data.athleteName,
+          isExtrapolated: data.hasExtrapolatedPoints,
         ),
     ];
 
@@ -341,6 +342,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
               preset: data.populationPreset,
               observedPoints: points,
               bandPoints: data.resolvedBandPoints,
+              showViewportControls: true,
             ),
           ],
         ),

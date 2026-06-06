@@ -405,6 +405,15 @@ void main() {
       expect(find.byType(SegmentedButton<NomogramMode>), findsOneWidget);
       expect(find.text('Nomogram Reference'), findsOneWidget);
       expect(find.text('Model selection'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Viewport'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Viewport'), findsOneWidget);
+      expect(find.text('Intensity range'), findsOneWidget);
+      expect(find.text('Slope range'), findsOneWidget);
+      expect(find.text('Reset view'), findsOneWidget);
       expect(find.text('Nomogram Model'), findsNothing);
       expect(find.text('Study model'), findsWidgets);
       expect(find.text('Hybrid model'), findsOneWidget);

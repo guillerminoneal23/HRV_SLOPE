@@ -40,12 +40,20 @@ class RpeSlopeQuadrantChart extends StatelessWidget {
                 final explanation = _explanationPanel();
 
                 if (constraints.maxWidth >= 900) {
+                  final chartSize = math.min(
+                    constraints.maxWidth * 0.55,
+                    560.0,
+                  );
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(flex: 6, child: chart),
+                      SizedBox(
+                        width: chartSize,
+                        height: chartSize,
+                        child: chart,
+                      ),
                       const SizedBox(width: 16),
-                      Expanded(flex: 4, child: explanation),
+                      Expanded(child: explanation),
                     ],
                   );
                 }
@@ -67,7 +75,10 @@ class RpeSlopeQuadrantChart extends StatelessWidget {
       return _EmptyQuadrantState(omittedSessions: data.summary.omittedSessions);
     }
 
-    return AspectRatio(aspectRatio: 1, child: LineChart(_chartData(points)));
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560, maxHeight: 560),
+      child: AspectRatio(aspectRatio: 1, child: LineChart(_chartData(points))),
+    );
   }
 
   Widget _explanationPanel() {

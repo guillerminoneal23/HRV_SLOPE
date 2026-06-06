@@ -545,8 +545,16 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         // The chart
         NomogramChart(
           preset: parsePopulationNomogramSource(n.presetName),
-          observedIntensity: n.intensityPercent,
-          observedSlope: n.observedSlope,
+          observedPoints: [
+            NomogramObservedPoint(
+              xIntensityPercent: n.intensityPercent,
+              ySlope: n.observedSlope,
+              label: r.taskName ?? r.sessionDate,
+              classification: n.classificationLabel,
+              isExtrapolated: n.isExtrapolated,
+            ),
+          ],
+          showViewportControls: true,
         ),
       ],
     );
