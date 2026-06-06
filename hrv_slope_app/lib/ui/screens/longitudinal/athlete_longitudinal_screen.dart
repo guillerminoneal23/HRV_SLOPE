@@ -85,11 +85,11 @@ class AthleteLongitudinalScreen extends StatefulWidget {
 
 class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   static const _slopeReferenceHelp =
-      "Points are colored by the session's slope_Orellana_19 zone. The reference is calculated per session from primary intensity.";
+      'Slope trend summarizes RMSSD-Slope changes across sessions.';
   static const _itlReferenceHelp =
-      'Reference ITL is derived as 1 / reference slope. Lower ITL generally reflects a more favorable response.';
+      'ITL trend contextualizes response against internal training load.';
   static const _referenceZonesHelp =
-      "Zones compare observed slope with the slope_Orellana_19 reference for that session's intensity: Lower-than-expected, Expected, Favorable, or Unavailable.";
+      'Colors compare each session with its selected reference zone.';
 
   LongitudinalSeries? _series;
   Athlete? _athlete;
@@ -357,47 +357,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
           else ...[
             _xAxisSelector(),
             _referenceToggle(series),
-            LongitudinalChart(
-              title: 'Slope Trend',
-              valueLabel: 'Slope',
-              points: [
-                for (final point in series.points)
-                  _chartPoint(
-                    point,
-                    value: point.interpretedSlope,
-                    color: _slopePointColor(point),
-                    tooltip: _slopeTooltip(point),
-                  ),
-              ],
-              selectedSessionId: _selectedSessionId,
-              onPointSelected: _selectSession,
-              xAxisLabel: _xAxisLabel,
-            ),
-            if (_colorByOrellanaZone) ...[
-              _zoneLegend(),
-              _referenceHelpText('$_slopeReferenceHelp $_referenceZonesHelp'),
-            ],
-            LongitudinalChart(
-              title: 'ITL Trend',
-              valueLabel: 'ITL',
-              points: [
-                for (final point in series.points)
-                  _chartPoint(
-                    point,
-                    value: point.itlIndex,
-                    color: _itlPointColor(point),
-                    tooltip: _itlTooltip(point),
-                  ),
-              ],
-              selectedSessionId: _selectedSessionId,
-              onPointSelected: _selectSession,
-              xAxisLabel: _xAxisLabel,
-              emptyMessage: 'No ITL values available for this athlete yet.',
-            ),
-            if (_colorByOrellanaZone) ...[
-              _zoneLegend(),
-              _referenceHelpText('$_itlReferenceHelp $_referenceZonesHelp'),
-            ],
+            _trendCharts(series),
             RpeSlopeQuadrantChart(
               data: series.rpeSlopeQuadrantData,
               selectedSessionId: _selectedSessionId,
@@ -1103,28 +1063,108 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     );
   }
 
+  Widget _trendCharts(LongitudinalSeries series) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final slopePanel = _trendChartPanel(
+          chart: _slopeTrendChart(series),
+          helpText: '$_slopeReferenceHelp $_referenceZonesHelp',
+        );
+        final itlPanel = _trendChartPanel(
+          chart: _itlTrendChart(series),
+          helpText: '$_itlReferenceHelp $_referenceZonesHelp',
+        );
+
+        if (constraints.maxWidth >= 900) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: slopePanel),
+              const SizedBox(width: 12),
+              Expanded(child: itlPanel),
+            ],
+          );
+        }
+
+        return Column(children: [slopePanel, itlPanel]);
+      },
+    );
+  }
+
+  Widget _trendChartPanel({required Widget chart, required String helpText}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        chart,
+        if (_colorByOrellanaZone) ...[
+          _zoneLegend(),
+          _referenceHelpText(helpText),
+        ],
+      ],
+    );
+  }
+
+  Widget _slopeTrendChart(LongitudinalSeries series) {
+    return LongitudinalChart(
+      title: 'Slope Trend',
+      valueLabel: 'Slope',
+      points: [
+        for (final point in series.points)
+          _chartPoint(
+            point,
+            value: point.interpretedSlope,
+            color: _slopePointColor(point),
+            tooltip: _slopeTooltip(point),
+          ),
+      ],
+      selectedSessionId: _selectedSessionId,
+      onPointSelected: _selectSession,
+      xAxisLabel: _xAxisLabel,
+    );
+  }
+
+  Widget _itlTrendChart(LongitudinalSeries series) {
+    return LongitudinalChart(
+      title: 'ITL Trend',
+      valueLabel: 'ITL',
+      points: [
+        for (final point in series.points)
+          _chartPoint(
+            point,
+            value: point.itlIndex,
+            color: _itlPointColor(point),
+            tooltip: _itlTooltip(point),
+          ),
+      ],
+      selectedSessionId: _selectedSessionId,
+      onPointSelected: _selectSession,
+      xAxisLabel: _xAxisLabel,
+      emptyMessage: 'No ITL values available for this athlete yet.',
+    );
+  }
+
   Widget _zoneLegend() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
       child: Wrap(
-        spacing: 12,
-        runSpacing: 6,
+        spacing: 10,
+        runSpacing: 4,
         children: const [
           _ZoneLegendItem(
             color: AppColors.warning,
-            label: 'Lower-than-expected: recovery response below reference',
+            label: 'Lower-than-expected: below reference',
           ),
           _ZoneLegendItem(
             color: AppColors.primary,
-            label: 'Expected: recovery response within reference',
+            label: 'Expected: within reference',
           ),
           _ZoneLegendItem(
             color: AppColors.success,
-            label: 'Favorable: recovery response above favorable threshold',
+            label: 'Favorable: above threshold',
           ),
           _ZoneLegendItem(
             color: AppColors.textHint,
-            label: 'Unavailable: reference cannot be calculated',
+            label: 'Unavailable: missing reference',
           ),
         ],
       ),
@@ -1133,7 +1173,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
 
   Widget _referenceHelpText(String text) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
       child: Text(
         text,
         style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),

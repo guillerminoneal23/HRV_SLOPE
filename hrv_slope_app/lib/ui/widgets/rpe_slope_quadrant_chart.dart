@@ -33,100 +33,133 @@ class RpeSlopeQuadrantChart extends StatelessWidget {
               'RPE vs Slope response',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              "Y-axis shows observed slope relative to the slope_Orellana_19 reference for each session's primary intensity.",
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'X-axis: RPE 1-10 · Y-axis: observed slope / slope_Orellana_19 reference · RPE threshold: 7.0 · Expected response line: 1.0',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Quadrants combine perceived effort and slope response: left = lower RPE, right = high RPE, above 1.0 = adequate/favorable slope response, below 1.0 = lower-than-expected slope response.',
-              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
             const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                _SummaryPill('${data.summary.pointsShown} points shown'),
-                _SummaryPill('${data.summary.missingRpe} missing RPE'),
-                _SummaryPill(
-                  '${data.summary.missingReference} missing reference',
-                ),
-                _SummaryPill(
-                  'High RPE threshold: ${data.highRpeThreshold.toStringAsFixed(1)}',
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final chart = _chartPanel(points);
+                final explanation = _explanationPanel();
+
+                if (constraints.maxWidth >= 900) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 6, child: chart),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 4, child: explanation),
+                    ],
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [chart, const SizedBox(height: 12), explanation],
+                );
+              },
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                _SummaryPill(
-                  '${data.summary.lowRpeFavorableSlopeResponse} low/moderate RPE + adequate/favorable',
-                ),
-                _SummaryPill(
-                  '${data.summary.highRpeFavorableSlopeResponse} high RPE + adequate/favorable',
-                ),
-                _SummaryPill(
-                  '${data.summary.highRpeLowSlopeResponse} high RPE + lower-than-expected',
-                ),
-                _SummaryPill(
-                  '${data.summary.lowRpeLowSlopeResponse} low/moderate RPE + lower-than-expected',
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (points.isEmpty)
-              _EmptyQuadrantState(omittedSessions: data.summary.omittedSessions)
-            else ...[
-              SizedBox(height: 260, child: LineChart(_chartData(points))),
-              const SizedBox(height: 10),
-              const Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  _LineLegendItem(label: 'RPE threshold'),
-                  _LineLegendItem(label: 'Expected slope response = 1.0'),
-                  _ZoneLegendItem(
-                    color: AppColors.warning,
-                    label: 'Lower-than-expected',
-                    detail: 'recovery response below reference',
-                  ),
-                  _ZoneLegendItem(
-                    color: AppColors.primary,
-                    label: 'Expected',
-                    detail: 'recovery response within reference',
-                  ),
-                  _ZoneLegendItem(
-                    color: AppColors.success,
-                    label: 'Favorable',
-                    detail: 'recovery response above favorable threshold',
-                  ),
-                  _ZoneLegendItem(
-                    color: AppColors.textHint,
-                    label: 'Unavailable',
-                    detail: 'reference cannot be calculated',
-                  ),
-                ],
-              ),
-              if (data.summary.omittedSessions > 0) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Some sessions were omitted because RPE or reference slope was unavailable.',
-                  style: TextStyle(fontSize: 12, color: AppColors.textHint),
-                ),
-              ],
-            ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _chartPanel(List<RpeSlopeQuadrantPoint> points) {
+    if (points.isEmpty) {
+      return _EmptyQuadrantState(omittedSessions: data.summary.omittedSessions);
+    }
+
+    return AspectRatio(aspectRatio: 1, child: LineChart(_chartData(points)));
+  }
+
+  Widget _explanationPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'How to read',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        const _ExplanationRow(label: 'X axis', value: 'RPE 1-10'),
+        const _ExplanationRow(
+          label: 'Y axis',
+          value: 'Observed slope divided by reference slope',
+        ),
+        _ExplanationRow(
+          label: 'Thresholds',
+          value:
+              'RPE ${data.highRpeThreshold.toStringAsFixed(1)} and response 1.0',
+        ),
+        const _ExplanationRow(
+          label: 'Quadrants',
+          value:
+              'Left = lower RPE, right = high RPE, above = adequate/favorable response.',
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            _SummaryPill('${data.summary.pointsShown} points shown'),
+            _SummaryPill('${data.summary.missingRpe} missing RPE'),
+            _SummaryPill('${data.summary.missingReference} missing reference'),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            _SummaryPill(
+              '${data.summary.lowRpeFavorableSlopeResponse} low/moderate RPE + adequate/favorable',
+            ),
+            _SummaryPill(
+              '${data.summary.highRpeFavorableSlopeResponse} high RPE + adequate/favorable',
+            ),
+            _SummaryPill(
+              '${data.summary.highRpeLowSlopeResponse} high RPE + lower-than-expected',
+            ),
+            _SummaryPill(
+              '${data.summary.lowRpeLowSlopeResponse} low/moderate RPE + lower-than-expected',
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            _LineLegendItem(label: 'RPE threshold'),
+            _LineLegendItem(label: 'Expected slope response = 1.0'),
+            _ZoneLegendItem(
+              color: AppColors.warning,
+              label: 'Lower-than-expected',
+              detail: 'below reference',
+            ),
+            _ZoneLegendItem(
+              color: AppColors.primary,
+              label: 'Expected',
+              detail: 'within reference',
+            ),
+            _ZoneLegendItem(
+              color: AppColors.success,
+              label: 'Favorable',
+              detail: 'above favorable threshold',
+            ),
+            _ZoneLegendItem(
+              color: AppColors.textHint,
+              label: 'Unavailable',
+              detail: 'missing reference',
+            ),
+          ],
+        ),
+        if (data.summary.omittedSessions > 0) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'Some sessions were omitted because RPE or reference slope was unavailable.',
+            style: TextStyle(fontSize: 12, color: AppColors.textHint),
+          ),
+        ],
+      ],
     );
   }
 
@@ -328,6 +361,45 @@ class _EmptyQuadrantState extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: AppColors.textHint),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ExplanationRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ExplanationRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 78,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
         ],
       ),
     );

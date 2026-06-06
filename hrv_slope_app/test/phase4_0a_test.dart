@@ -946,129 +946,111 @@ void main() {
       expect(selectedSessionId, 2);
     });
 
-    testWidgets('RPE slope quadrant chart shows thresholds tooltip and select', (
-      tester,
-    ) async {
-      int? selectedSessionId;
-      const data = RpeSlopeQuadrantData(
-        highRpeThreshold: 7,
-        points: [
-          RpeSlopeQuadrantPoint(
-            sessionId: 11,
-            date: '2026-05-28',
-            sessionTaskName: 'RSA',
-            rpe: 6,
-            observedSlope: 0.8,
-            observedItl: 1.25,
-            primaryIntensityValue: 60,
-            primaryIntensityMetric: 'rpe_1_10',
-            intensitySourceForSlope: 'Internal',
-            referenceSlope: 2.2,
-            slopeResponseIndex: 0.36,
-            recoveryZone: LongitudinalRecoveryZone.low,
-            quadrant: RpeSlopeQuadrant.lowRpeLowSlopeResponse,
-            notesSummary: 'Notes should not appear in compact tooltip',
+    testWidgets(
+      'RPE slope quadrant chart shows thresholds tooltip and select',
+      (tester) async {
+        int? selectedSessionId;
+        const data = RpeSlopeQuadrantData(
+          highRpeThreshold: 7,
+          points: [
+            RpeSlopeQuadrantPoint(
+              sessionId: 11,
+              date: '2026-05-28',
+              sessionTaskName: 'RSA',
+              rpe: 6,
+              observedSlope: 0.8,
+              observedItl: 1.25,
+              primaryIntensityValue: 60,
+              primaryIntensityMetric: 'rpe_1_10',
+              intensitySourceForSlope: 'Internal',
+              referenceSlope: 2.2,
+              slopeResponseIndex: 0.36,
+              recoveryZone: LongitudinalRecoveryZone.low,
+              quadrant: RpeSlopeQuadrant.lowRpeLowSlopeResponse,
+              notesSummary: 'Notes should not appear in compact tooltip',
+            ),
+          ],
+          summary: RpeSlopeQuadrantSummary(
+            pointsShown: 1,
+            missingRpe: 0,
+            missingReference: 0,
+            lowRpeFavorableSlopeResponse: 0,
+            highRpeFavorableSlopeResponse: 0,
+            highRpeLowSlopeResponse: 0,
+            lowRpeLowSlopeResponse: 1,
           ),
-        ],
-        summary: RpeSlopeQuadrantSummary(
-          pointsShown: 1,
-          missingRpe: 0,
-          missingReference: 0,
-          lowRpeFavorableSlopeResponse: 0,
-          highRpeFavorableSlopeResponse: 0,
-          highRpeLowSlopeResponse: 0,
-          lowRpeLowSlopeResponse: 1,
-        ),
-      );
+        );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: RpeSlopeQuadrantChart(
-                data: data,
-                onPointSelected: (sessionId) => selectedSessionId = sessionId,
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: RpeSlopeQuadrantChart(
+                  data: data,
+                  onPointSelected: (sessionId) => selectedSessionId = sessionId,
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      expect(find.text('RPE vs Slope response'), findsOneWidget);
-      expect(
-        find.textContaining(
-          'Y-axis shows observed slope relative to the slope_Orellana_19 reference',
-        ),
-        findsOneWidget,
-      );
-      expect(find.textContaining('X-axis: RPE 1-10'), findsOneWidget);
-      expect(
-        find.textContaining(
-          'Y-axis: observed slope / slope_Orellana_19 reference',
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('Expected response line: 1.0'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('left = lower RPE, right = high RPE'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('above 1.0 = adequate/favorable slope response'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('below 1.0 = lower-than-expected slope response'),
-        findsOneWidget,
-      );
-      expect(find.text('High RPE threshold: 7.0'), findsOneWidget);
-      expect(find.text('RPE threshold'), findsOneWidget);
-      expect(find.text('Expected slope response = 1.0'), findsOneWidget);
-      expect(find.textContaining('Lower-than-expected:'), findsOneWidget);
-      expect(find.textContaining('Expected:'), findsOneWidget);
-      expect(find.textContaining('Favorable:'), findsOneWidget);
-      expect(find.textContaining('Unavailable:'), findsOneWidget);
+        expect(find.text('RPE vs Slope response'), findsOneWidget);
+        expect(find.text('How to read'), findsOneWidget);
+        expect(find.text('X axis'), findsOneWidget);
+        expect(find.text('RPE 1-10'), findsWidgets);
+        expect(find.text('Y axis'), findsOneWidget);
+        expect(
+          find.text('Observed slope divided by reference slope'),
+          findsOneWidget,
+        );
+        expect(find.text('Thresholds'), findsOneWidget);
+        expect(find.text('RPE 7.0 and response 1.0'), findsOneWidget);
+        expect(find.text('Quadrants'), findsOneWidget);
+        expect(find.text('RPE threshold'), findsOneWidget);
+        expect(find.text('Expected slope response = 1.0'), findsOneWidget);
+        expect(find.textContaining('Lower-than-expected:'), findsOneWidget);
+        expect(find.textContaining('Expected:'), findsOneWidget);
+        expect(find.textContaining('Favorable:'), findsOneWidget);
+        expect(find.textContaining('Unavailable:'), findsOneWidget);
 
-      final chart = tester.widget<LineChart>(find.byType(LineChart));
-      expect(chart.data.extraLinesData.verticalLines.single.x, 7);
-      expect(chart.data.extraLinesData.horizontalLines.single.y, 1);
+        final chart = tester.widget<LineChart>(find.byType(LineChart));
+        expect(chart.data.extraLinesData.verticalLines.single.x, 7);
+        expect(chart.data.extraLinesData.horizontalLines.single.y, 1);
 
-      final bar = chart.data.lineBarsData.single;
-      final touchedSpot = TouchLineBarSpot(bar, 0, bar.spots.single, 0);
-      final tooltip = chart.data.lineTouchData.touchTooltipData.getTooltipItems(
-        [touchedSpot],
-      ).single!;
+        final bar = chart.data.lineBarsData.single;
+        final touchedSpot = TouchLineBarSpot(bar, 0, bar.spots.single, 0);
+        final tooltip = chart.data.lineTouchData.touchTooltipData
+            .getTooltipItems([touchedSpot])
+            .single!;
 
-      expect(tooltip.text, contains('2026-05-28'));
-      expect(tooltip.text, contains('RSA'));
-      expect(tooltip.text, contains('RPE: 6.0'));
-      expect(tooltip.text, contains('Slope: 0.800'));
-      expect(tooltip.text, contains('Response index: 0.36'));
-      expect(tooltip.text, contains('Response: Lower-than-expected'));
-      expect(tooltip.text, contains('Intensity: 60.0%'));
-      expect(tooltip.text, isNot(contains('Notes should not appear')));
-      expect(tooltip.text, isNot(contains('threshold')));
+        expect(tooltip.text, contains('2026-05-28'));
+        expect(tooltip.text, contains('RSA'));
+        expect(tooltip.text, contains('RPE: 6.0'));
+        expect(tooltip.text, contains('Slope: 0.800'));
+        expect(tooltip.text, contains('Response index: 0.36'));
+        expect(tooltip.text, contains('Response: Lower-than-expected'));
+        expect(tooltip.text, contains('Intensity: 60.0%'));
+        expect(tooltip.text, isNot(contains('Notes should not appear')));
+        expect(tooltip.text, isNot(contains('threshold')));
 
-      chart.data.lineTouchData.touchCallback?.call(
-        FlTapUpEvent(
-          TapUpDetails(
-            kind: PointerDeviceKind.touch,
-            globalPosition: Offset.zero,
-            localPosition: Offset.zero,
+        chart.data.lineTouchData.touchCallback?.call(
+          FlTapUpEvent(
+            TapUpDetails(
+              kind: PointerDeviceKind.touch,
+              globalPosition: Offset.zero,
+              localPosition: Offset.zero,
+            ),
           ),
-        ),
-        LineTouchResponse(
-          touchLocation: Offset.zero,
-          touchChartCoordinate: Offset.zero,
-          lineBarSpots: [touchedSpot],
-        ),
-      );
+          LineTouchResponse(
+            touchLocation: Offset.zero,
+            touchChartCoordinate: Offset.zero,
+            lineBarSpots: [touchedSpot],
+          ),
+        );
 
-      expect(selectedSessionId, 11);
-    });
+        expect(selectedSessionId, 11);
+      },
+    );
 
     testWidgets('empty state when no complete sessions', (tester) async {
       await tester.pumpWidget(
@@ -1187,19 +1169,19 @@ void main() {
       expect(lineChart.data.lineBarsData, hasLength(1));
       expect(lineChart.data.lineBarsData.single.color, AppColors.primary);
       expect(lineChart.data.maxY, lessThan(2));
-      expect(find.textContaining('Lower-than-expected:'), findsOneWidget);
-      expect(find.textContaining('Expected:'), findsOneWidget);
-      expect(find.textContaining('Favorable:'), findsOneWidget);
+      expect(find.text('Lower-than-expected: 1'), findsOneWidget);
+      expect(find.text('Expected: 1'), findsOneWidget);
+      expect(find.text('Favorable: 1'), findsOneWidget);
+      expect(
+        find.textContaining('Lower-than-expected: below reference'),
+        findsAtLeastNWidgets(1),
+      );
       await _dragUntilVisible(
         tester,
-        find.textContaining(
-          "Points are colored by the session's slope_Orellana_19 zone.",
-        ),
+        find.textContaining('Slope trend summarizes RMSSD-Slope changes'),
       );
       expect(
-        find.textContaining(
-          "Points are colored by the session's slope_Orellana_19 zone.",
-        ),
+        find.textContaining('Slope trend summarizes RMSSD-Slope changes'),
         findsOneWidget,
       );
     });
@@ -1394,9 +1376,7 @@ void main() {
         List.filled(4, AppColors.primary),
       );
       expect(
-        find.textContaining(
-          "Points are colored by the session's slope_Orellana_19 zone.",
-        ),
+        find.textContaining('Slope trend summarizes RMSSD-Slope changes'),
         findsNothing,
       );
 
@@ -1439,6 +1419,58 @@ void main() {
       expect(find.text('Residual Trend'), findsOneWidget);
     });
 
+    testWidgets('wide dashboard compacts trends and explains quadrant chart', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await _seedSession(db, athleteId, slope: 0.5);
+      await _seedSession(db, athleteId, slope: 1.0, day: 2);
+      await _seedSession(db, athleteId, slope: 0.8, day: 3);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.scrollUntilVisible(
+        find.text('Model selection'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Model selection'), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+        find.text('Slope Trend'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Slope Trend'), findsOneWidget);
+      expect(find.text('ITL Trend'), findsOneWidget);
+
+      final slopeTop = tester.getTopLeft(find.text('Slope Trend')).dy;
+      final itlTop = tester.getTopLeft(find.text('ITL Trend')).dy;
+      expect((slopeTop - itlTop).abs(), lessThan(60));
+
+      await tester.scrollUntilVisible(
+        find.text('RPE vs Slope response'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('RPE vs Slope response'), findsOneWidget);
+      expect(find.text('How to read'), findsOneWidget);
+      expect(find.text('X axis'), findsOneWidget);
+      expect(find.text('Y axis'), findsOneWidget);
+    });
+
     testWidgets('dashboard explains ITL reference and zones', (tester) async {
       await _seedSession(db, athleteId, slope: 0.5);
       await _seedSession(db, athleteId, slope: 1.0, day: 2);
@@ -1452,7 +1484,9 @@ void main() {
 
       await _dragUntilVisible(
         tester,
-        find.textContaining('Reference ITL is derived as 1 / reference slope'),
+        find.textContaining(
+          'ITL trend contextualizes response against internal training load',
+        ),
       );
 
       final itlChart = tester
@@ -1465,15 +1499,12 @@ void main() {
       expect(itlChart.points.first.tooltip, contains('Slope:'));
       expect(itlChart.points.first.tooltip, isNot(contains('Reference ITL')));
       expect(
-        find.textContaining('Reference ITL is derived as 1 / reference slope'),
+        find.textContaining(
+          'ITL trend contextualizes response against internal training load',
+        ),
         findsOneWidget,
       );
-      expect(
-        find.textContaining(
-          'Lower-than-expected, Expected, Favorable, or Unavailable',
-        ),
-        findsWidgets,
-      );
+      expect(find.textContaining('Colors compare each session'), findsWidgets);
     });
 
     test('recovery response labels map zones and legacy classes', () {
