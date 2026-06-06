@@ -11,6 +11,7 @@ import 'package:hrv_slope_app/shared/engine/group_report_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/ui/screens/reports/group_report_screen.dart';
 import 'package:hrv_slope_app/ui/screens/reports/population_nomogram_screen.dart';
+import 'package:hrv_slope_app/ui/widgets/date_filter_field.dart';
 import 'package:hrv_slope_app/ui/widgets/nomogram_chart.dart';
 
 void main() {
@@ -278,14 +279,15 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(
-        find.widgetWithText(TextField, 'From date'),
-        '2026-05-30',
+      final dateFrom = tester.widget<DateFilterField>(
+        find.byKey(const Key('group_report_date_from')),
       );
-      await tester.enterText(
-        find.widgetWithText(TextField, 'To date'),
-        '2026-05-01',
+      final dateTo = tester.widget<DateFilterField>(
+        find.byKey(const Key('group_report_date_to')),
       );
+      dateFrom.controller.text = '2026-05-30';
+      dateTo.controller.text = '2026-05-01';
+      await tester.pump();
       await tester.tap(find.text('Apply filters').first);
       await tester.pumpAndSettle();
 

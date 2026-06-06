@@ -11,6 +11,7 @@ import 'package:hrv_slope_app/shared/engine/group_report_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/widgets/date_filter_field.dart';
 
 class GroupReportScreen extends StatefulWidget {
   final AppDatabase database;
@@ -243,9 +244,21 @@ class _GroupReportScreenState extends State<GroupReportScreen> {
             _sectionTitle('Date range'),
             Row(
               children: [
-                Expanded(child: _dateField(_dateFromCtrl, 'From date')),
+                Expanded(
+                  child: DateFilterField(
+                    key: const Key('group_report_date_from'),
+                    controller: _dateFromCtrl,
+                    label: 'From date',
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _dateField(_dateToCtrl, 'To date')),
+                Expanded(
+                  child: DateFilterField(
+                    key: const Key('group_report_date_to'),
+                    controller: _dateToCtrl,
+                    label: 'To date',
+                  ),
+                ),
               ],
             ),
             if (_filterError != null) ...[
@@ -371,43 +384,6 @@ class _GroupReportScreenState extends State<GroupReportScreen> {
         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
       ),
     );
-  }
-
-  Widget _dateField(TextEditingController controller, String label) {
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        suffixIcon: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: 'Pick date',
-              icon: const Icon(Icons.calendar_today),
-              onPressed: () => _pickDate(controller),
-            ),
-            IconButton(
-              tooltip: 'Clear date',
-              icon: const Icon(Icons.clear),
-              onPressed: () => setState(controller.clear),
-            ),
-          ],
-        ),
-      ),
-      onTap: () => _pickDate(controller),
-    );
-  }
-
-  Future<void> _pickDate(TextEditingController controller) async {
-    final current = DateTime.tryParse(controller.text.trim());
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: current ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked == null) return;
-    controller.text = _calendarKey(picked);
   }
 
   Widget _chipGroup(

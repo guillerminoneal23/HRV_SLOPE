@@ -11,6 +11,7 @@ import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/screens/nomogram/individual_nomogram_screen.dart';
 import 'package:hrv_slope_app/ui/screens/reports/individual_report_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/widgets/date_filter_field.dart';
 import 'package:hrv_slope_app/ui/widgets/longitudinal_chart.dart';
 import 'package:hrv_slope_app/ui/widgets/rpe_slope_quadrant_chart.dart';
 
@@ -476,24 +477,16 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: TextFormField(
+                    child: DateFilterField(
                       controller: _dateFromController,
-                      decoration: InputDecoration(
-                        labelText: 'Date from',
-                        hintText: options.dateMin ?? 'YYYY-MM-DD',
-                      ),
-                      onEditingComplete: _applyPendingFilter,
+                      label: 'Date from',
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: TextFormField(
+                    child: DateFilterField(
                       controller: _dateToController,
-                      decoration: InputDecoration(
-                        labelText: 'Date to',
-                        hintText: options.dateMax ?? 'YYYY-MM-DD',
-                      ),
-                      onEditingComplete: _applyPendingFilter,
+                      label: 'Date to',
                     ),
                   ),
                 ],

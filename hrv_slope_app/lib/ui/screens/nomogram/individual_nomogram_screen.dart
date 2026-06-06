@@ -9,6 +9,7 @@ import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/widgets/date_filter_field.dart';
 import 'package:hrv_slope_app/ui/widgets/nomogram_chart.dart';
 
 class IndividualNomogramScreen extends StatefulWidget {
@@ -658,19 +659,13 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
                 children: [
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final dateFrom = TextField(
+                      final dateFrom = DateFilterField(
                         controller: _filterDateFromController,
-                        decoration: const InputDecoration(
-                          labelText: 'Date from',
-                          hintText: 'YYYY-MM-DD',
-                        ),
+                        label: 'Date from',
                       );
-                      final dateTo = TextField(
+                      final dateTo = DateFilterField(
                         controller: _filterDateToController,
-                        decoration: const InputDecoration(
-                          labelText: 'Date to',
-                          hintText: 'YYYY-MM-DD',
-                        ),
+                        label: 'Date to',
                       );
                       if (constraints.maxWidth >= 520) {
                         return Row(
