@@ -383,6 +383,147 @@ void main() {
       expect(find.text('Session points'), findsOneWidget);
     });
 
+    testWidgets('individual nomogram shows collapsible point filters', (
+      tester,
+    ) async {
+      await _seedSession(db, athleteId, intensity: 80, slope: 0.5);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualNomogramScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final filtersPanel = find.byKey(const Key('individual_nomogram_filters'));
+      final filtersHeader = find.descendant(
+        of: filtersPanel,
+        matching: find.byType(ListTile),
+      );
+      await tester.scrollUntilVisible(
+        filtersHeader,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Filters (0)'), findsOneWidget);
+      expect(find.text('Filter nomogram points'), findsOneWidget);
+      expect(find.text('Showing 1 of 1 points'), findsOneWidget);
+      expect(find.text('Apply filters'), findsNothing);
+
+      await tester.ensureVisible(filtersHeader);
+      await tester.pumpAndSettle();
+      await tester.tap(filtersHeader);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Date from'), findsOneWidget);
+      expect(find.text('Date to'), findsOneWidget);
+      expect(find.textContaining('Intensity:'), findsWidgets);
+      expect(find.text('Response'), findsOneWidget);
+      expect(find.text('Apply filters'), findsOneWidget);
+      expect(find.text('Viewport'), findsOneWidget);
+    });
+
+    testWidgets('response filter updates chart points and valid points list', (
+      tester,
+    ) async {
+      final bands = evaluatePopulationNomogramBands(
+        80,
+        source: PopulationNomogramSource.excelOperational,
+      );
+      await _seedSession(
+        db,
+        athleteId,
+        intensity: 80,
+        slope: bands.expectedLower / 2,
+      );
+      await _seedSession(
+        db,
+        athleteId,
+        day: 2,
+        intensity: 80,
+        slope: bands.expectedMean,
+      );
+      await _seedSession(
+        db,
+        athleteId,
+        day: 3,
+        intensity: 80,
+        slope: bands.expectedUpper + 0.2,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualNomogramScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final filtersPanel = find.byKey(const Key('individual_nomogram_filters'));
+      final filtersHeader = find.descendant(
+        of: filtersPanel,
+        matching: find.byType(ListTile),
+      );
+      await tester.scrollUntilVisible(
+        filtersHeader,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(filtersHeader);
+      await tester.pumpAndSettle();
+      await tester.tap(filtersHeader);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Showing 3 of 3 points'), findsOneWidget);
+      final favorableChip = find.widgetWithText(FilterChip, 'Favorable');
+      await tester.ensureVisible(favorableChip);
+      await tester.pumpAndSettle();
+      await tester.tap(favorableChip);
+      await tester.pumpAndSettle();
+
+      final applyButton = find.widgetWithText(FilledButton, 'Apply filters');
+      await tester.ensureVisible(applyButton);
+      await tester.pumpAndSettle();
+      await tester.tap(applyButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Filters (1)'), findsOneWidget);
+      expect(find.text('Showing 2 of 3 points'), findsOneWidget);
+      expect(
+        tester.widget<NomogramChart>(find.byType(NomogramChart)).observedPoints,
+        hasLength(2),
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Valid Points'),
+        400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Session 1'), findsOneWidget);
+      expect(find.text('Session 2'), findsOneWidget);
+      expect(find.text('Session 3'), findsNothing);
+
+      await tester.scrollUntilVisible(
+        filtersHeader,
+        -400,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      final resetButton = find.widgetWithText(TextButton, 'Reset filters');
+      await tester.ensureVisible(resetButton);
+      await tester.pumpAndSettle();
+      await tester.tap(resetButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Filters (0)'), findsOneWidget);
+      expect(find.text('Showing 3 of 3 points'), findsOneWidget);
+      expect(
+        tester.widget<NomogramChart>(find.byType(NomogramChart)).observedPoints,
+        hasLength(3),
+      );
+    });
+
     testWidgets('chart renders one active band set when hybrid applies', (
       tester,
     ) async {

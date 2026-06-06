@@ -34,6 +34,14 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
   NomogramMode? _selectedNomogramMode;
   bool _loading = true;
   bool _refreshingNomogram = false;
+  final _filterDateFromController = TextEditingController();
+  final _filterDateToController = TextEditingController();
+  String? _filterDateFrom;
+  String? _filterDateTo;
+  RangeValues? _pendingIntensityRange;
+  RangeValues? _filterIntensityRange;
+  Set<String>? _pendingResponseCategories;
+  Set<String>? _filterResponseCategories;
 
   @override
   void initState() {
@@ -44,6 +52,8 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _filterDateFromController.dispose();
+    _filterDateToController.dispose();
     super.dispose();
   }
 
@@ -138,6 +148,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
         body: const Center(child: Text('Athlete not found')),
       );
     }
+    final visiblePoints = _filteredValidPoints(data);
 
     return Scaffold(
       appBar: AppBar(
@@ -157,8 +168,8 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
           _header(athlete, data),
           _confidenceCard(data),
           if (data.warnings.isNotEmpty) _warningsCard(data),
-          _chartCard(data),
-          _pointsList(data),
+          _chartCard(data, visiblePoints),
+          _pointsList(data, visiblePoints),
           _excludedList(data),
         ],
       ),
@@ -281,9 +292,12 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
     );
   }
 
-  Widget _chartCard(IndividualNomogramData data) {
+  Widget _chartCard(
+    IndividualNomogramData data,
+    List<IndividualNomogramPoint> visiblePoints,
+  ) {
     final points = [
-      for (final point in data.validPoints)
+      for (final point in visiblePoints)
         NomogramObservedPoint(
           xIntensityPercent: point.intensityPercent,
           ySlope: point.interpretedSlope,
@@ -337,6 +351,8 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
               _modeGuidance(data),
               style: const TextStyle(color: AppColors.textSecondary),
             ),
+            const SizedBox(height: 12),
+            _filtersPanel(data, visiblePoints),
             const SizedBox(height: 12),
             NomogramChart(
               preset: data.populationPreset,
@@ -492,7 +508,308 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
     );
   }
 
-  Widget _pointsList(IndividualNomogramData data) {
+  List<IndividualNomogramPoint> _filteredValidPoints(
+    IndividualNomogramData data,
+  ) {
+    return data.validPoints.where((point) {
+      if (_filterDateFrom != null &&
+          point.date.compareTo(_filterDateFrom!) < 0) {
+        return false;
+      }
+      if (_filterDateTo != null && point.date.compareTo(_filterDateTo!) > 0) {
+        return false;
+      }
+      final intensityRange = _filterIntensityRange;
+      if (intensityRange != null &&
+          (point.intensityPercent < intensityRange.start ||
+              point.intensityPercent > intensityRange.end)) {
+        return false;
+      }
+      final responses = _filterResponseCategories;
+      if (responses != null && !responses.contains(_responseLabel(point))) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  ({double min, double max})? _intensityBounds(IndividualNomogramData data) {
+    if (data.validPoints.isEmpty) return null;
+    final intensities =
+        data.validPoints.map((point) => point.intensityPercent).toList()
+          ..sort();
+    return (min: intensities.first, max: intensities.last);
+  }
+
+  Set<String> _responseOptions(IndividualNomogramData data) {
+    return {for (final point in data.validPoints) _responseLabel(point)};
+  }
+
+  String _responseLabel(IndividualNomogramPoint point) {
+    final label = _classificationLabel(point.classification);
+    return label == '-' ? 'Unknown / unavailable' : label;
+  }
+
+  int get _activeFilterCount {
+    var count = 0;
+    if (_filterDateFrom != null) count++;
+    if (_filterDateTo != null) count++;
+    if (_filterIntensityRange != null) count++;
+    if (_filterResponseCategories != null) count++;
+    return count;
+  }
+
+  void _applyFilters(IndividualNomogramData data) {
+    final bounds = _intensityBounds(data);
+    final pendingRange = _pendingIntensityRange;
+    final responseOptions = _responseOptions(data);
+    final pendingResponses = _pendingResponseCategories;
+    setState(() {
+      _filterDateFrom = _trimmedOrNull(_filterDateFromController.text);
+      _filterDateTo = _trimmedOrNull(_filterDateToController.text);
+      _filterIntensityRange =
+          bounds == null ||
+              pendingRange == null ||
+              ((pendingRange.start - bounds.min).abs() < 0.001 &&
+                  (pendingRange.end - bounds.max).abs() < 0.001)
+          ? null
+          : pendingRange;
+      _filterResponseCategories =
+          pendingResponses == null ||
+              pendingResponses.length == responseOptions.length
+          ? null
+          : Set.unmodifiable(pendingResponses);
+    });
+  }
+
+  void _resetFilters() {
+    setState(() {
+      _filterDateFromController.clear();
+      _filterDateToController.clear();
+      _filterDateFrom = null;
+      _filterDateTo = null;
+      _pendingIntensityRange = null;
+      _filterIntensityRange = null;
+      _pendingResponseCategories = null;
+      _filterResponseCategories = null;
+    });
+  }
+
+  Widget _filtersPanel(
+    IndividualNomogramData data,
+    List<IndividualNomogramPoint> visiblePoints,
+  ) {
+    final bounds = _intensityBounds(data);
+    final intensityRange =
+        _pendingIntensityRange ??
+        _filterIntensityRange ??
+        (bounds == null ? null : RangeValues(bounds.min, bounds.max));
+    final responseOptions = _responseOptions(data).toList()..sort();
+    final selectedResponses =
+        _pendingResponseCategories ??
+        _filterResponseCategories ??
+        responseOptions.toSet();
+
+    return Material(
+      color: AppColors.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          ExpansionTile(
+            key: const Key('individual_nomogram_filters'),
+            initiallyExpanded: _activeFilterCount > 0,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+            childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            title: Text('Filters ($_activeFilterCount)'),
+            subtitle: const Text('Filter nomogram points'),
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final dateFrom = TextField(
+                    controller: _filterDateFromController,
+                    decoration: const InputDecoration(
+                      labelText: 'Date from',
+                      hintText: 'YYYY-MM-DD',
+                    ),
+                  );
+                  final dateTo = TextField(
+                    controller: _filterDateToController,
+                    decoration: const InputDecoration(
+                      labelText: 'Date to',
+                      hintText: 'YYYY-MM-DD',
+                    ),
+                  );
+                  if (constraints.maxWidth >= 520) {
+                    return Row(
+                      children: [
+                        Expanded(child: dateFrom),
+                        const SizedBox(width: 8),
+                        Expanded(child: dateTo),
+                      ],
+                    );
+                  }
+                  return Column(
+                    children: [dateFrom, const SizedBox(height: 8), dateTo],
+                  );
+                },
+              ),
+              if (bounds != null && intensityRange != null) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Intensity: ${_filterNumber(intensityRange.start)}-${_filterNumber(intensityRange.end)}%',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                if (bounds.min < bounds.max)
+                  SizedBox(
+                    height: 36,
+                    child: RangeSlider(
+                      min: bounds.min,
+                      max: bounds.max,
+                      values: intensityRange,
+                      divisions: 20,
+                      onChanged: (values) =>
+                          setState(() => _pendingIntensityRange = values),
+                    ),
+                  ),
+              ],
+              if (responseOptions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Response',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      for (final response in responseOptions)
+                        FilterChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(response),
+                          selected: selectedResponses.contains(response),
+                          onSelected: (_) {
+                            final next = Set<String>.of(selectedResponses);
+                            next.contains(response)
+                                ? next.remove(response)
+                                : next.add(response);
+                            setState(() => _pendingResponseCategories = next);
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              _activeFilterChips(),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (_activeFilterCount > 0)
+                    TextButton.icon(
+                      onPressed: _resetFilters,
+                      icon: const Icon(Icons.clear, size: 16),
+                      label: const Text('Reset filters'),
+                    ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: () => _applyFilters(data),
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Apply filters'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Showing ${visiblePoints.length} of ${data.validPoints.length} points',
+                key: const Key('individual_nomogram_point_count'),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          if (visiblePoints.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'No valid points match the current filters.',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _activeFilterChips() {
+    final labels = <String>[
+      if (_filterDateFrom != null || _filterDateTo != null)
+        'Date: ${_filterDateFrom ?? 'start'}-${_filterDateTo ?? 'latest'}',
+      if (_filterIntensityRange != null)
+        'Intensity: ${_filterNumber(_filterIntensityRange!.start)}-${_filterNumber(_filterIntensityRange!.end)}%',
+      if (_filterResponseCategories != null)
+        'Response: ${_filterResponseCategories!.join(', ')}',
+    ];
+    if (labels.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: [
+            for (final label in labels)
+              Chip(
+                visualDensity: VisualDensity.compact,
+                label: Text(label, style: const TextStyle(fontSize: 11)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _trimmedOrNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  String _filterNumber(double value) {
+    return value == value.roundToDouble()
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(1);
+  }
+
+  Widget _pointsList(
+    IndividualNomogramData data,
+    List<IndividualNomogramPoint> visiblePoints,
+  ) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -510,8 +827,13 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
                 'No valid points yet. Sessions need intensity percent and interpreted slope.',
                 style: TextStyle(color: AppColors.textHint),
               )
+            else if (visiblePoints.isEmpty)
+              const Text(
+                'No valid points match the current filters.',
+                style: TextStyle(color: AppColors.textHint),
+              )
             else
-              for (final point in data.validPoints)
+              for (final point in visiblePoints)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(point.taskName ?? point.date),
