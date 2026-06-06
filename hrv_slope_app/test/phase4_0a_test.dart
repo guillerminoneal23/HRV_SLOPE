@@ -1132,12 +1132,9 @@ void main() {
 
       await _dragUntilVisible(
         tester,
-        find.text('Color points by slope_Orellana_19 zone'),
+        find.text('Color points by recovery status'),
       );
-      expect(
-        find.text('Color points by slope_Orellana_19 zone'),
-        findsOneWidget,
-      );
+      expect(find.text('Color points by recovery status'), findsOneWidget);
       expect(find.text('Show slope_Orellana_19 reference'), findsNothing);
 
       await _dragUntilVisible(tester, find.text('Slope Trend'));
@@ -1243,86 +1240,16 @@ void main() {
       );
       expect(
         find.byKey(const Key('longitudinal_nomogram_filters')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(find.text('Showing 2 of 2 points'), findsOneWidget);
-      expect(find.text('Reset filters'), findsOneWidget);
-      expect(find.text('External load'), findsWidgets);
-      expect(find.byType(NomogramChart), findsOneWidget);
-    });
-
-    testWidgets('longitudinal nomogram filters points and resets', (
-      tester,
-    ) async {
-      final bands = evaluatePopulationNomogramBands(
-        80,
-        source: PopulationNomogramSource.slopeOrellana19,
-      );
-      await _seedSession(db, athleteId, slope: bands.expectedLower / 2);
-      await _seedSession(db, athleteId, slope: bands.expectedMean, day: 2);
-      await _seedSession(
-        db,
-        athleteId,
-        slope: bands.expectedUpper + 0.2,
-        day: 3,
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('longitudinal_nomogram_point_count')),
-        300,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Showing 3 of 3 points'), findsOneWidget);
       expect(
-        find.widgetWithText(FilterChip, 'Lower-than-expected'),
-        findsOneWidget,
+        find.text('Date range follows the dashboard filters.'),
+        findsNothing,
       );
-      expect(find.widgetWithText(FilterChip, 'Expected'), findsOneWidget);
-      expect(find.widgetWithText(FilterChip, 'Favorable'), findsOneWidget);
-
-      final favorableChip = find.widgetWithText(FilterChip, 'Favorable');
-      await tester.scrollUntilVisible(
-        favorableChip,
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(favorableChip);
-      await tester.pumpAndSettle();
-
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('longitudinal_nomogram_point_count')),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Showing 2 of 3 points'), findsOneWidget);
-      expect(find.textContaining('Response:'), findsOneWidget);
-
-      final resetFiltersButton = find.widgetWithText(
-        TextButton,
-        'Reset filters',
-      );
-      await tester.ensureVisible(resetFiltersButton);
-      await tester.pumpAndSettle();
-      await tester.tap(resetFiltersButton);
-      await tester.pumpAndSettle();
-
-      await tester.scrollUntilVisible(
-        find.byKey(const Key('longitudinal_nomogram_point_count')),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Showing 3 of 3 points'), findsOneWidget);
+      expect(find.text('Reset filters'), findsNothing);
+      expect(find.textContaining('Showing 2 of 2 points'), findsNothing);
+      expect(find.byType(NomogramChart), findsNothing);
+      expect(find.text('Color points by recovery status'), findsOneWidget);
     });
 
     testWidgets('changing longitudinal model keeps reference area visible', (
@@ -1348,10 +1275,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Model selection'), findsOneWidget);
-      expect(
-        find.text('Color points by slope_Orellana_19 zone'),
-        findsOneWidget,
-      );
+      expect(find.text('Color points by recovery status'), findsOneWidget);
       expect(find.text('Requested model'), findsOneWidget);
       expect(find.text('Hybrid model'), findsWidgets);
       expect(
@@ -1420,7 +1344,7 @@ void main() {
       await tester.pumpAndSettle();
       await _dragUntilVisible(
         tester,
-        find.text('Color points by slope_Orellana_19 zone'),
+        find.text('Color points by recovery status'),
       );
 
       await _dragUntilVisible(tester, find.text('Slope Trend'));
@@ -1450,9 +1374,9 @@ void main() {
 
       await _dragBackUntilVisible(
         tester,
-        find.text('Color points by slope_Orellana_19 zone'),
+        find.text('Color points by recovery status'),
       );
-      await tester.tap(find.text('Color points by slope_Orellana_19 zone'));
+      await tester.tap(find.text('Color points by recovery status'));
       await tester.pumpAndSettle();
 
       await _dragUntilVisible(tester, find.text('Slope Trend'));
@@ -1694,12 +1618,9 @@ void main() {
       expect(tester.takeException(), isNull);
       await _dragUntilVisible(
         tester,
-        find.text('Color points by slope_Orellana_19 zone'),
+        find.text('Color points by recovery status'),
       );
-      expect(
-        find.text('Color points by slope_Orellana_19 zone'),
-        findsOneWidget,
-      );
+      expect(find.text('Color points by recovery status'), findsOneWidget);
       expect(
         find.textContaining(
           'slope_Orellana_19 reference requires primary intensity and slope data.',

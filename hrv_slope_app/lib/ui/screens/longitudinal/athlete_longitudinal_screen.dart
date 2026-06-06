@@ -6,14 +6,12 @@ import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
-import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/screens/nomogram/individual_nomogram_screen.dart';
 import 'package:hrv_slope_app/ui/screens/reports/individual_report_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/longitudinal_chart.dart';
-import 'package:hrv_slope_app/ui/widgets/nomogram_chart.dart';
 import 'package:hrv_slope_app/ui/widgets/rpe_slope_quadrant_chart.dart';
 
 enum _OverlayMetric { intensity, rpe, fatigue, srpe, trimp }
@@ -91,7 +89,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   static const _itlReferenceHelp =
       'ITL trend contextualizes response against internal training load.';
   static const _referenceZonesHelp =
-      'Colors compare each session with its selected reference zone.';
+      'Colors compare each session with its selected recovery status.';
 
   LongitudinalSeries? _series;
   Athlete? _athlete;
@@ -105,10 +103,6 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   LongitudinalXAxisMode _xAxisMode = LongitudinalXAxisMode.sessionOrder;
   bool _colorByOrellanaZone = true;
   int? _selectedSessionId;
-  RangeValues? _nomogramIntensityRange;
-  RangeValues? _nomogramRpeRange;
-  Set<LongitudinalRecoveryZone>? _nomogramZones;
-  Set<String>? _nomogramSources;
   final _dateFromController = TextEditingController();
   final _dateToController = TextEditingController();
   final _notesController = TextEditingController();
@@ -886,126 +880,6 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     );
   }
 
-  List<LongitudinalPoint> _nomogramPlottablePoints(LongitudinalSeries series) {
-    return series.points
-        .where(
-          (point) =>
-              point.primaryIntensityValue != null &&
-              point.interpretedSlope != null,
-        )
-        .toList();
-  }
-
-  List<LongitudinalPoint> _filteredNomogramPoints(LongitudinalSeries series) {
-    final points = _nomogramPlottablePoints(series);
-    final intensityBounds = _valueBounds(
-      points.map((point) => point.primaryIntensityValue),
-    );
-    final rpeBounds = _valueBounds(points.map((point) => point.rpe));
-    final intensityRange = _resolvedRange(
-      _nomogramIntensityRange,
-      intensityBounds,
-    );
-    final rpeRange = _resolvedRange(_nomogramRpeRange, rpeBounds);
-
-    return points.where((point) {
-      final intensity = point.primaryIntensityValue!;
-      if (_nomogramIntensityRange != null &&
-          intensityRange != null &&
-          (intensity < intensityRange.start ||
-              intensity > intensityRange.end)) {
-        return false;
-      }
-      final rpe = point.rpe;
-      if (_nomogramRpeRange != null &&
-          (rpe == null ||
-              rpeRange == null ||
-              rpe < rpeRange.start ||
-              rpe > rpeRange.end)) {
-        return false;
-      }
-      if (_nomogramZones != null &&
-          !_nomogramZones!.contains(point.nomogramReference.zone)) {
-        return false;
-      }
-      if (_nomogramSources != null &&
-          !_nomogramSources!.contains(point.intensitySourceForSlope)) {
-        return false;
-      }
-      return true;
-    }).toList();
-  }
-
-  ({double min, double max})? _valueBounds(Iterable<double?> values) {
-    final available = values.whereType<double>().toList();
-    if (available.isEmpty) return null;
-    available.sort();
-    return (min: available.first, max: available.last);
-  }
-
-  RangeValues? _resolvedRange(
-    RangeValues? selected,
-    ({double min, double max})? bounds,
-  ) {
-    if (bounds == null) return null;
-    if (selected == null || bounds.min == bounds.max) {
-      return RangeValues(bounds.min, bounds.max);
-    }
-    final start = selected.start.clamp(bounds.min, bounds.max).toDouble();
-    final end = selected.end.clamp(bounds.min, bounds.max).toDouble();
-    return RangeValues(
-      start < end ? start : bounds.min,
-      start < end ? end : bounds.max,
-    );
-  }
-
-  void _toggleNomogramZone(
-    LongitudinalRecoveryZone zone,
-    Set<LongitudinalRecoveryZone> available,
-  ) {
-    final selected = Set<LongitudinalRecoveryZone>.of(
-      _nomogramZones ?? available,
-    );
-    selected.contains(zone) ? selected.remove(zone) : selected.add(zone);
-    setState(() {
-      _nomogramZones = selected.length == available.length ? null : selected;
-    });
-  }
-
-  void _toggleNomogramSource(String source, Set<String> available) {
-    final selected = Set<String>.of(_nomogramSources ?? available);
-    selected.contains(source) ? selected.remove(source) : selected.add(source);
-    setState(() {
-      _nomogramSources = selected.length == available.length ? null : selected;
-    });
-  }
-
-  void _resetNomogramFilters() {
-    setState(() {
-      _nomogramIntensityRange = null;
-      _nomogramRpeRange = null;
-      _nomogramZones = null;
-      _nomogramSources = null;
-    });
-  }
-
-  void _setNomogramRange({
-    required RangeValues values,
-    required ({double min, double max}) bounds,
-    required bool isIntensity,
-  }) {
-    final isFullRange =
-        (values.start - bounds.min).abs() < 0.001 &&
-        (values.end - bounds.max).abs() < 0.001;
-    setState(() {
-      if (isIntensity) {
-        _nomogramIntensityRange = isFullRange ? null : values;
-      } else {
-        _nomogramRpeRange = isFullRange ? null : values;
-      }
-    });
-  }
-
   Widget _referenceToggle(LongitudinalSeries series) {
     final available = series.nomogramReferenceSeries.availableCount;
     return Card(
@@ -1019,19 +893,15 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
             const SizedBox(height: 12),
             _nomogramModelMetadata(series.nomogramReferenceSeries),
             const Divider(height: 16),
-            _nomogramFiltersAndChart(series),
-            const Divider(height: 16),
             SwitchListTile(
               value: _colorByOrellanaZone,
               contentPadding: EdgeInsets.zero,
               title: Row(
                 children: const [
-                  Expanded(
-                    child: Text('Color points by slope_Orellana_19 zone'),
-                  ),
+                  Expanded(child: Text('Color points by recovery status')),
                   Tooltip(
                     message:
-                        "Points are colored by the session's slope_Orellana_19 zone. The reference is calculated per session from primary intensity.",
+                        "Points are colored by the session's recovery status. The reference is calculated per session from primary intensity.",
                     triggerMode: TooltipTriggerMode.tap,
                     child: Icon(Icons.help_outline, size: 18),
                   ),
@@ -1040,7 +910,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               subtitle: Text(
                 available == 0
                     ? 'slope_Orellana_19 reference requires primary intensity and slope data.'
-                    : '$available sessions have slope_Orellana_19 zone data.',
+                    : '$available sessions have recovery status data.',
               ),
               onChanged: (value) =>
                   setState(() => _colorByOrellanaZone = value),
@@ -1049,306 +919,6 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         ),
       ),
     );
-  }
-
-  Widget _nomogramFiltersAndChart(LongitudinalSeries series) {
-    final allPoints = _nomogramPlottablePoints(series);
-    final filteredPoints = _filteredNomogramPoints(series);
-    final intensityBounds = _valueBounds(
-      allPoints.map((point) => point.primaryIntensityValue),
-    );
-    final rpeBounds = _valueBounds(allPoints.map((point) => point.rpe));
-    final intensityRange = _resolvedRange(
-      _nomogramIntensityRange,
-      intensityBounds,
-    );
-    final rpeRange = _resolvedRange(_nomogramRpeRange, rpeBounds);
-    final zones = {for (final point in allPoints) point.nomogramReference.zone};
-    final sources = {
-      for (final point in allPoints) point.intensitySourceForSlope,
-    };
-    final hasLocalFilters =
-        _nomogramIntensityRange != null ||
-        _nomogramRpeRange != null ||
-        _nomogramZones != null ||
-        _nomogramSources != null;
-
-    return Column(
-      key: const Key('longitudinal_nomogram_filters'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Filters',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: hasLocalFilters ? _resetNomogramFilters : null,
-              style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
-              icon: const Icon(Icons.filter_alt_off, size: 16),
-              label: const Text('Reset filters'),
-            ),
-          ],
-        ),
-        Text(
-          'Date range follows the dashboard filters.',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final intensityControl = _nomogramRangeControl(
-              label: 'Intensity',
-              suffix: '%',
-              bounds: intensityBounds,
-              values: intensityRange,
-              onChanged: (values) => _setNomogramRange(
-                values: values,
-                bounds: intensityBounds!,
-                isIntensity: true,
-              ),
-            );
-            final rpeControl = _nomogramRangeControl(
-              label: 'RPE',
-              bounds: rpeBounds,
-              values: rpeRange,
-              onChanged: (values) => _setNomogramRange(
-                values: values,
-                bounds: rpeBounds!,
-                isIntensity: false,
-              ),
-            );
-            if (constraints.maxWidth >= 640) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: intensityControl),
-                  const SizedBox(width: 16),
-                  Expanded(child: rpeControl),
-                ],
-              );
-            }
-            return Column(
-              children: [
-                intensityControl,
-                const SizedBox(height: 4),
-                rpeControl,
-              ],
-            );
-          },
-        ),
-        if (zones.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          const Text(
-            'Response',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (final zone in LongitudinalRecoveryZone.values)
-                if (zones.contains(zone))
-                  FilterChip(
-                    visualDensity: VisualDensity.compact,
-                    label: Text(_nomogramZoneLabel(zone)),
-                    selected:
-                        _nomogramZones == null ||
-                        _nomogramZones!.contains(zone),
-                    onSelected: (_) => _toggleNomogramZone(zone, zones),
-                  ),
-            ],
-          ),
-        ],
-        if (sources.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          const Text(
-            'Intensity source',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (final source in sources.toList()..sort())
-                FilterChip(
-                  visualDensity: VisualDensity.compact,
-                  label: Text(longitudinalIntensitySourceLabel(source)),
-                  selected:
-                      _nomogramSources == null ||
-                      _nomogramSources!.contains(source),
-                  onSelected: (_) => _toggleNomogramSource(source, sources),
-                ),
-            ],
-          ),
-        ],
-        _nomogramActiveFilters(
-          series,
-          intensityRange: intensityRange,
-          rpeRange: rpeRange,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Showing ${filteredPoints.length} of ${allPoints.length} points',
-          key: const Key('longitudinal_nomogram_point_count'),
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        if (filteredPoints.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text(
-              'No sessions match the current filters.',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-        _longitudinalNomogramChart(series, filteredPoints),
-      ],
-    );
-  }
-
-  Widget _nomogramRangeControl({
-    required String label,
-    String suffix = '',
-    required ({double min, double max})? bounds,
-    required RangeValues? values,
-    required ValueChanged<RangeValues> onChanged,
-  }) {
-    if (bounds == null || values == null) {
-      return Text(
-        '$label: unavailable',
-        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-      );
-    }
-    final enabled = bounds.min < bounds.max;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '$label: ${_filterNumber(values.start)}-${_filterNumber(values.end)}$suffix',
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-        ),
-        if (enabled)
-          SizedBox(
-            height: 34,
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 2,
-                rangeThumbShape: const RoundRangeSliderThumbShape(
-                  enabledThumbRadius: 5,
-                ),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                showValueIndicator: ShowValueIndicator.never,
-              ),
-              child: RangeSlider(
-                min: bounds.min,
-                max: bounds.max,
-                values: values,
-                divisions: 20,
-                onChanged: onChanged,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _nomogramActiveFilters(
-    LongitudinalSeries series, {
-    required RangeValues? intensityRange,
-    required RangeValues? rpeRange,
-  }) {
-    final labels = <String>[
-      if (series.filter.dateFrom != null || series.filter.dateTo != null)
-        'Dashboard date: ${series.filter.dateFrom ?? 'start'}-${series.filter.dateTo ?? 'latest'}',
-      if (_nomogramIntensityRange != null && intensityRange != null)
-        'Intensity: ${_filterNumber(intensityRange.start)}-${_filterNumber(intensityRange.end)}%',
-      if (_nomogramRpeRange != null && rpeRange != null)
-        'RPE: ${_filterNumber(rpeRange.start)}-${_filterNumber(rpeRange.end)}',
-      if (_nomogramZones != null)
-        'Response: ${_nomogramZones!.map(_nomogramZoneLabel).join(', ')}',
-      if (_nomogramSources != null)
-        'Source: ${_nomogramSources!.map(longitudinalIntensitySourceLabel).join(', ')}',
-    ];
-    if (labels.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 4,
-        children: [
-          for (final label in labels)
-            Chip(
-              visualDensity: VisualDensity.compact,
-              label: Text(label, style: const TextStyle(fontSize: 11)),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _longitudinalNomogramChart(
-    LongitudinalSeries series,
-    List<LongitudinalPoint> points,
-  ) {
-    final bandPointsByIntensity = <double, NomogramBandPoint>{};
-    for (final reference in series.nomogramReferenceSeries.points) {
-      final intensity = reference.primaryIntensityValue;
-      final lower = reference.lowerSlopeThreshold;
-      final mean = reference.referenceSlope;
-      final upper = reference.upperSlopeThreshold;
-      if (intensity != null && lower != null && mean != null && upper != null) {
-        bandPointsByIntensity[intensity] = NomogramBandPoint(
-          intensityPercent: intensity,
-          lower: lower,
-          mean: mean,
-          upper: upper,
-        );
-      }
-    }
-    final bandPoints = bandPointsByIntensity.values.toList()
-      ..sort((a, b) => a.intensityPercent.compareTo(b.intensityPercent));
-    final observedPoints = [
-      for (final point in points)
-        NomogramObservedPoint(
-          xIntensityPercent: point.primaryIntensityValue!,
-          ySlope: point.interpretedSlope!,
-          label: point.taskName == null
-              ? point.date
-              : '${point.date} - ${point.taskName}',
-          classification: point.classification,
-          sessionId: point.sessionId,
-          athleteName: series.athleteName,
-          isExtrapolated: point.nomogramReference.isExtrapolated,
-        ),
-    ];
-    return NomogramChart(
-      preset: parsePopulationNomogramSource(
-        series.nomogramReferenceSeries.source,
-      ),
-      observedPoints: observedPoints,
-      bandPoints: bandPoints,
-    );
-  }
-
-  String _nomogramZoneLabel(LongitudinalRecoveryZone zone) {
-    return zone == LongitudinalRecoveryZone.unavailable
-        ? 'Unknown / missing'
-        : zone.label;
-  }
-
-  String _filterNumber(double value) {
-    return value == value.roundToDouble()
-        ? value.toStringAsFixed(0)
-        : value.toStringAsFixed(1);
   }
 
   Widget _nomogramModelSelection() {
