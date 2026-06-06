@@ -222,6 +222,7 @@ class _NomogramChartState extends State<NomogramChart> {
               maxX: resolvedXMax,
               minY: resolvedYMin,
               maxY: resolvedYMax,
+              clipData: const FlClipData.all(),
               lineBarsData: lines,
               betweenBarsData: betweenData,
               gridData: FlGridData(
@@ -327,7 +328,7 @@ class _NomogramChartState extends State<NomogramChart> {
     final xEnabled = fullXMax - fullXMin > 1;
     final yEnabled = fullYMax - fullYMin > 0.1;
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(8),
@@ -345,41 +346,68 @@ class _NomogramChartState extends State<NomogramChart> {
               ),
               TextButton.icon(
                 onPressed: _resetViewport,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
                 icon: const Icon(Icons.fit_screen, size: 16),
                 label: const Text('Reset view'),
               ),
             ],
           ),
-          _rangeControl(
-            label: 'Intensity range',
-            valueLabel:
-                '${viewXMin.toStringAsFixed(0)}-${viewXMax.toStringAsFixed(0)}%',
-            min: fullXMin,
-            max: fullXMax,
-            values: RangeValues(viewXMin, viewXMax),
-            enabled: xEnabled,
-            onChanged: (values) {
-              final next = _normalizeRange(values, fullXMin, fullXMax, 5);
-              setState(() {
-                _viewXMin = next.start;
-                _viewXMax = next.end;
-              });
-            },
-          ),
-          _rangeControl(
-            label: 'Slope range',
-            valueLabel:
-                '${_formatAxisValue(viewYMin, fullYMax - fullYMin)}-${_formatAxisValue(viewYMax, fullYMax - fullYMin)}',
-            min: fullYMin,
-            max: fullYMax,
-            values: RangeValues(viewYMin, viewYMax),
-            enabled: yEnabled,
-            onChanged: (values) {
-              final next = _normalizeRange(values, fullYMin, fullYMax, 0.1);
-              setState(() {
-                _viewYMin = next.start;
-                _viewYMax = next.end;
-              });
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final intensityControl = _rangeControl(
+                label: 'Intensity range',
+                valueLabel:
+                    '${viewXMin.toStringAsFixed(0)}-${viewXMax.toStringAsFixed(0)}%',
+                min: fullXMin,
+                max: fullXMax,
+                values: RangeValues(viewXMin, viewXMax),
+                enabled: xEnabled,
+                onChanged: (values) {
+                  final next = _normalizeRange(values, fullXMin, fullXMax, 5);
+                  setState(() {
+                    _viewXMin = next.start;
+                    _viewXMax = next.end;
+                  });
+                },
+              );
+              final slopeControl = _rangeControl(
+                label: 'Slope range',
+                valueLabel:
+                    '${_formatAxisValue(viewYMin, fullYMax - fullYMin)}-${_formatAxisValue(viewYMax, fullYMax - fullYMin)}',
+                min: fullYMin,
+                max: fullYMax,
+                values: RangeValues(viewYMin, viewYMax),
+                enabled: yEnabled,
+                onChanged: (values) {
+                  final next = _normalizeRange(values, fullYMin, fullYMax, 0.1);
+                  setState(() {
+                    _viewYMin = next.start;
+                    _viewYMax = next.end;
+                  });
+                },
+              );
+
+              if (constraints.maxWidth >= 640) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: intensityControl),
+                    const SizedBox(width: 16),
+                    Expanded(child: slopeControl),
+                  ],
+                );
+              }
+
+              return Column(
+                children: [
+                  intensityControl,
+                  const SizedBox(height: 4),
+                  slopeControl,
+                ],
+              );
             },
           ),
         ],
@@ -413,16 +441,30 @@ class _NomogramChartState extends State<NomogramChart> {
             Text(valueLabel, style: const TextStyle(fontSize: 12)),
           ],
         ),
-        RangeSlider(
-          min: min,
-          max: max,
-          values: values,
-          divisions: enabled ? 20 : null,
-          labels: RangeLabels(
-            values.start.toStringAsFixed(1),
-            values.end.toStringAsFixed(1),
+        SizedBox(
+          height: 34,
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              rangeThumbShape: const RoundRangeSliderThumbShape(
+                enabledThumbRadius: 5,
+                disabledThumbRadius: 5,
+              ),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+              showValueIndicator: ShowValueIndicator.never,
+            ),
+            child: RangeSlider(
+              min: min,
+              max: max,
+              values: values,
+              divisions: enabled ? 20 : null,
+              labels: RangeLabels(
+                values.start.toStringAsFixed(1),
+                values.end.toStringAsFixed(1),
+              ),
+              onChanged: enabled ? onChanged : null,
+            ),
           ),
-          onChanged: enabled ? onChanged : null,
         ),
       ],
     );
