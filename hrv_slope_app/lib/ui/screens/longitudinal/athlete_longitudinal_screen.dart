@@ -90,7 +90,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   static const _itlReferenceHelp =
       'ITL trend contextualizes response against internal training load.';
   static const _referenceZonesHelp =
-      'Colors compare each session with its selected recovery status.';
+      'Colors show recovery status for each session.';
 
   LongitudinalSeries? _series;
   Athlete? _athlete;
@@ -103,6 +103,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   LongitudinalDashboardFilter _filter = const LongitudinalDashboardFilter();
   LongitudinalXAxisMode _xAxisMode = LongitudinalXAxisMode.sessionOrder;
   bool _colorByOrellanaZone = true;
+  bool _dataCompletenessExpanded = false;
   int? _selectedSessionId;
   final _dateFromController = TextEditingController();
   final _dateToController = TextEditingController();
@@ -351,12 +352,10 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
         children: [
           _header(athlete, series),
           _filtersPanel(series),
-          _summary(series),
           _dataCompleteness(series),
           if (series.points.isEmpty)
             _emptyFilteredState(series)
           else ...[
-            _xAxisSelector(),
             _referenceToggle(series),
             _trendCharts(series),
             RpeSlopeQuadrantChart(
@@ -385,44 +384,68 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              athlete.name,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-            ),
-            if (athlete.sport != null)
-              Text(
-                athlete.sport!,
-                style: const TextStyle(color: AppColors.textSecondary),
-              ),
-            const Divider(height: 20),
-            _row('Date range', dateRange),
-            _row(
-              'Sessions',
-              '${series.completeness.includedSessions} of ${series.completeness.totalSessions}',
-            ),
-            _row('Complete sessions', '${series.summary.nComplete}'),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => IndividualNomogramScreen(
-                      database: widget.database,
-                      athleteId: widget.athleteId,
-                    ),
-                  ),
-                ),
-                icon: const Icon(Icons.scatter_plot),
-                label: const Text('Nomogram'),
-              ),
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final identity = _athleteIdentity(athlete, series, dateRange);
+            final metrics = _summaryMetrics(series);
+            if (constraints.maxWidth >= 800) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 4, child: identity),
+                  const SizedBox(width: 20),
+                  Expanded(flex: 6, child: metrics),
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [identity, const Divider(height: 20), metrics],
+            );
+          },
         ),
       ),
+    );
+  }
+
+  Widget _athleteIdentity(
+    Athlete athlete,
+    LongitudinalSeries series,
+    String dateRange,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          athlete.name,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        ),
+        if (athlete.sport != null)
+          Text(
+            athlete.sport!,
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+        const SizedBox(height: 10),
+        _row('Date range', dateRange),
+        _row(
+          'Sessions',
+          '${series.completeness.includedSessions} of ${series.completeness.totalSessions}',
+        ),
+        _row('Complete sessions', '${series.summary.nComplete}'),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => IndividualNomogramScreen(
+                database: widget.database,
+                athleteId: widget.athleteId,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.scatter_plot),
+          label: const Text('Nomogram'),
+        ),
+      ],
     );
   }
 
@@ -760,25 +783,19 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     return next;
   }
 
-  Widget _summary(LongitudinalSeries series) {
+  Widget _summaryMetrics(LongitudinalSeries series) {
     final s = series.summary;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: [
-            _metric('Latest slope', _fixed(s.latestSlope, 3)),
-            _metric('Latest ITL', _fixed(s.latestItl, 3)),
-            _metric('Latest response', _classLabel(s.latestClassification)),
-            _metric('Mean slope', _fixed(s.meanSlope, 3)),
-            _metric('Trend', _trendLabel(s.trendDirection)),
-            _metric('Active flags', '${series.fatigueFlags.length}'),
-          ],
-        ),
-      ),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _metric('Latest slope', _fixed(s.latestSlope, 3)),
+        _metric('Latest ITL', _fixed(s.latestItl, 3)),
+        _metric('Latest response', _classLabel(s.latestClassification)),
+        _metric('Mean slope', _fixed(s.meanSlope, 3)),
+        _metric('Trend', _trendLabel(s.trendDirection)),
+        _metric('Active flags', '${series.fatigueFlags.length}'),
+      ],
     );
   }
 
@@ -786,36 +803,80 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     final c = series.completeness;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _metric(
-              'Included / total',
-              '${c.includedSessions}/${c.totalSessions}',
+      child: Column(
+        children: [
+          InkWell(
+            key: const Key('longitudinal_data_completeness_header'),
+            onTap: () => setState(
+              () => _dataCompletenessExpanded = !_dataCompletenessExpanded,
             ),
-            _metric('With slope', '${c.withSlope}'),
-            _metric('With ITL', '${c.withItl}'),
-            _metric('External intensity', '${c.withExternalIntensity}'),
-            _metric('Internal fallback', '${c.withInternalFallback}'),
-            _metric('With RPE', '${c.withRpe}'),
-            _metric('With fatigue', '${c.withFatigue}'),
-            _metric(
-              'slope_Orellana_19 reference',
-              '${c.withSlopeOrellana19Reference}',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Data completeness',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Session coverage and recovery status counts',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    _dataCompletenessExpanded
+                        ? Icons.expand_less
+                        : Icons.expand_more,
+                  ),
+                ],
+              ),
             ),
-            _metric(
-              'Missing reference intensity',
-              '${c.missingReferencePrimaryIntensity}',
+          ),
+          if (_dataCompletenessExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _metric(
+                    'Included / total',
+                    '${c.includedSessions}/${c.totalSessions}',
+                  ),
+                  _metric('With slope', '${c.withSlope}'),
+                  _metric('With ITL', '${c.withItl}'),
+                  _metric('External intensity', '${c.withExternalIntensity}'),
+                  _metric('Internal fallback', '${c.withInternalFallback}'),
+                  _metric('With RPE', '${c.withRpe}'),
+                  _metric('With fatigue', '${c.withFatigue}'),
+                  _metric(
+                    'Recovery status available',
+                    '${c.withSlopeOrellana19Reference}',
+                  ),
+                  _metric(
+                    'Missing reference intensity',
+                    '${c.missingReferencePrimaryIntensity}',
+                  ),
+                  _metric('Lower-than-expected', '${c.referenceZoneLow}'),
+                  _metric('Expected', '${c.referenceZoneNormal}'),
+                  _metric('Favorable', '${c.referenceZoneFavorable}'),
+                  _metric('Missing key data', '${c.missingKeyData}'),
+                ],
+              ),
             ),
-            _metric('Lower-than-expected', '${c.referenceZoneLow}'),
-            _metric('Expected', '${c.referenceZoneNormal}'),
-            _metric('Favorable', '${c.referenceZoneFavorable}'),
-            _metric('Missing key data', '${c.missingKeyData}'),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -847,27 +908,34 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     );
   }
 
-  Widget _xAxisSelector() {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: DropdownButtonFormField<LongitudinalXAxisMode>(
-          initialValue: _xAxisMode,
-          decoration: const InputDecoration(labelText: 'X-axis'),
-          items: const [
-            DropdownMenuItem(
-              value: LongitudinalXAxisMode.sessionOrder,
-              child: Text('Session order'),
+  Widget _compactXAxisControl() {
+    return PopupMenuButton<LongitudinalXAxisMode>(
+      tooltip: 'Change X-axis',
+      initialValue: _xAxisMode,
+      onSelected: (value) => setState(() => _xAxisMode = value),
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: LongitudinalXAxisMode.sessionOrder,
+          child: Text('Session order'),
+        ),
+        PopupMenuItem(value: LongitudinalXAxisMode.date, child: Text('Date')),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.cardBorder),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'X: ${_xAxisMode == LongitudinalXAxisMode.date ? 'Date' : 'Session'}',
+              style: const TextStyle(fontSize: 12),
             ),
-            DropdownMenuItem(
-              value: LongitudinalXAxisMode.date,
-              child: Text('Date'),
-            ),
+            const SizedBox(width: 2),
+            const Icon(Icons.arrow_drop_down, size: 18),
           ],
-          onChanged: (value) {
-            if (value != null) setState(() => _xAxisMode = value);
-          },
         ),
       ),
     );
@@ -902,7 +970,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               ),
               subtitle: Text(
                 available == 0
-                    ? 'slope_Orellana_19 reference requires primary intensity and slope data.'
+                    ? 'Recovery status requires primary intensity and slope data.'
                     : '$available sessions have recovery status data.',
               ),
               onChanged: (value) =>
@@ -1111,6 +1179,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       selectedSessionId: _selectedSessionId,
       onPointSelected: _selectSession,
       xAxisLabel: _xAxisLabel,
+      headerTrailing: _compactXAxisControl(),
     );
   }
 
@@ -1131,6 +1200,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       onPointSelected: _selectSession,
       xAxisLabel: _xAxisLabel,
       emptyMessage: 'No ITL values available for this athlete yet.',
+      headerTrailing: _compactXAxisControl(),
     );
   }
 
@@ -1235,6 +1305,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
               ? resolvePrimaryIntensityOverlayInterval(intensityOverlayMax)
               : null,
           emptyMessage: 'No values available for this selected overlay.',
+          headerTrailing: _compactXAxisControl(),
         ),
         LongitudinalChart(
           title: 'Residual Trend',
@@ -1255,6 +1326,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
           xAxisLabel: _xAxisLabel,
           emptyMessage:
               'Residuals require intensity percent and interpreted slope.',
+          headerTrailing: _compactXAxisControl(),
         ),
       ],
     );
@@ -1451,7 +1523,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       point.date,
       point.taskName ?? 'Session',
       'Slope: ${_fixed(point.interpretedSlope, 3)}',
-      'Zone: ${point.nomogramReference.zone.label}',
+      'Recovery status: ${point.nomogramReference.zone.label}',
       _intensityTooltipLine(point),
       if (point.rpe != null) 'RPE: ${_fixed(point.rpe, 1)}',
     ].join('\n');
@@ -1462,7 +1534,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       point.date,
       point.taskName ?? 'Session',
       'ITL: ${_fixed(point.itlIndex, 3)}',
-      'Zone: ${point.nomogramReference.zone.label}',
+      'Recovery status: ${point.nomogramReference.zone.label}',
       _intensityTooltipLine(point),
       'Slope: ${_fixed(point.interpretedSlope, 3)}',
     ].join('\n');
@@ -1484,7 +1556,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       point.date,
       point.taskName ?? 'Session',
       'Residual: ${_fixed(point.residual, 3)}',
-      'Zone: ${point.nomogramReference.zone.label}',
+      'Recovery status: ${point.nomogramReference.zone.label}',
     ].join('\n');
   }
 

@@ -791,6 +791,27 @@ void main() {
 
       expect(find.text('Runner One'), findsOneWidget);
       expect(find.textContaining('Latest slope'), findsOneWidget);
+      expect(find.text('Data completeness'), findsOneWidget);
+      expect(find.textContaining('Included / total'), findsNothing);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('longitudinal_data_completeness_header')),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('longitudinal_data_completeness_header')),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.textContaining('Included / total'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Included / total'), findsOneWidget);
       await _dragUntilVisible(tester, find.text('Slope Trend'));
       expect(find.text('Slope Trend'), findsOneWidget);
     });
@@ -1130,6 +1151,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.tap(
+        find.byKey(const Key('longitudinal_data_completeness_header')),
+      );
+      await tester.pumpAndSettle();
       await _dragUntilVisible(
         tester,
         find.text('Color points by recovery status'),
@@ -1154,7 +1179,7 @@ void main() {
       expect(slopeChart.points.first.tooltip, contains('Slope:'));
       expect(
         slopeChart.points.first.tooltip,
-        contains('Zone: Lower-than-expected'),
+        contains('Recovery status: Lower-than-expected'),
       );
       expect(slopeChart.points.first.tooltip, contains('Intensity:'));
       expect(
@@ -1477,6 +1502,18 @@ void main() {
       );
       expect(find.text('Slope Trend'), findsOneWidget);
       expect(find.text('ITL Trend'), findsOneWidget);
+      expect(find.text('X: Session'), findsNWidgets(2));
+      expect(
+        find.byType(DropdownButtonFormField<LongitudinalXAxisMode>),
+        findsNothing,
+      );
+      await tester.tap(find.byTooltip('Change X-axis').first);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(PopupMenuItem<LongitudinalXAxisMode>, 'Date'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('X: Date'), findsNWidgets(2));
 
       final slopeTop = tester.getTopLeft(find.text('Slope Trend')).dy;
       final itlTop = tester.getTopLeft(find.text('ITL Trend')).dy;
@@ -1516,7 +1553,7 @@ void main() {
           .firstWhere((chart) => chart.title == 'ITL Trend');
       expect(itlChart.referenceSeries, isEmpty);
       expect(itlChart.points.first.tooltip, contains('ITL:'));
-      expect(itlChart.points.first.tooltip, contains('Zone:'));
+      expect(itlChart.points.first.tooltip, contains('Recovery status:'));
       expect(itlChart.points.first.tooltip, contains('Intensity:'));
       expect(itlChart.points.first.tooltip, contains('Slope:'));
       expect(itlChart.points.first.tooltip, isNot(contains('Reference ITL')));
@@ -1526,7 +1563,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.textContaining('Colors compare each session'), findsWidgets);
+      expect(find.textContaining('Colors show recovery status'), findsWidgets);
     });
 
     test('recovery response labels map zones and legacy classes', () {
@@ -1623,7 +1660,7 @@ void main() {
       expect(find.text('Color points by recovery status'), findsOneWidget);
       expect(
         find.textContaining(
-          'slope_Orellana_19 reference requires primary intensity and slope data.',
+          'Recovery status requires primary intensity and slope data.',
         ),
         findsOneWidget,
       );

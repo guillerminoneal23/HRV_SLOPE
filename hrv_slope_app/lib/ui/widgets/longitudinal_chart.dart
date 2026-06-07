@@ -104,6 +104,7 @@ class LongitudinalChart extends StatelessWidget {
   final double? yMax;
   final double? yInterval;
   final List<LongitudinalChartReferenceSeries> referenceSeries;
+  final Widget? headerTrailing;
 
   const LongitudinalChart({
     super.key,
@@ -118,6 +119,7 @@ class LongitudinalChart extends StatelessWidget {
     this.yMax,
     this.yInterval,
     this.referenceSeries = const [],
+    this.headerTrailing,
   });
 
   @override
@@ -148,9 +150,22 @@ class LongitudinalChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (headerTrailing != null) ...[
+                  const SizedBox(width: 8),
+                  headerTrailing!,
+                ],
+              ],
             ),
             const SizedBox(height: 12),
             if (valid.length < 2 && !hasReferenceLine)
