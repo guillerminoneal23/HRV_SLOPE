@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
+import 'package:hrv_slope_app/data/services/nomogram_mode_preference_service.dart';
 import 'package:hrv_slope_app/shared/engine/individual_nomogram_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
@@ -45,6 +46,9 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
   Set<String>? _pendingResponseCategories;
   Set<String>? _filterResponseCategories;
 
+  NomogramModePreferenceService get _nomogramModePreferences =>
+      NomogramModePreferenceService(widget.database.settingsDao);
+
   @override
   void initState() {
     super.initState();
@@ -73,17 +77,19 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
     final preset = parsePopulationNomogramSource(presetName);
     final details = await widget.database.sessionsDao
         .getSessionDetailsForAthlete(widget.athleteId);
+    final requestedMode = await _nomogramModePreferences.load(widget.athleteId);
     final data = buildIndividualNomogramData(
       athlete: athlete,
       details: details,
       populationPreset: preset,
+      requestedNomogramMode: requestedMode,
     );
     if (mounted) {
       setState(() {
         _athlete = athlete;
         _preset = preset;
         _data = data;
-        _selectedNomogramMode = data.requestedMode;
+        _selectedNomogramMode = requestedMode;
         _loading = false;
       });
     }
@@ -122,6 +128,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
       _refreshingNomogram = true;
     });
 
+    await _nomogramModePreferences.save(widget.athleteId, mode);
     final details = await widget.database.sessionsDao
         .getSessionDetailsForAthlete(widget.athleteId);
     if (!mounted || mode != _selectedNomogramMode) return;

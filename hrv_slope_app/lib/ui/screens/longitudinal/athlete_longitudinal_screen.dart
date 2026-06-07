@@ -5,6 +5,7 @@ import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
+import 'package:hrv_slope_app/data/services/nomogram_mode_preference_service.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
@@ -119,6 +120,9 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
   final _itlMinController = TextEditingController();
   final _itlMaxController = TextEditingController();
 
+  NomogramModePreferenceService get _nomogramModePreferences =>
+      NomogramModePreferenceService(widget.database.settingsDao);
+
   @override
   void initState() {
     super.initState();
@@ -155,17 +159,19 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     }
     final details = await widget.database.sessionsDao
         .getSessionDetailsForAthlete(widget.athleteId);
+    final requestedMode = await _nomogramModePreferences.load(widget.athleteId);
     final series = buildLongitudinalSeries(
       athlete: athlete,
       details: details,
       filter: _filter,
-      requestedNomogramMode: _selectedNomogramMode,
+      requestedNomogramMode: requestedMode,
     );
     if (mounted) {
       setState(() {
         _athlete = athlete;
         _details = details;
         _series = series;
+        _selectedNomogramMode = requestedMode;
         _loading = false;
       });
     }
@@ -201,6 +207,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
       _selectedNomogramMode = mode;
     });
 
+    await _nomogramModePreferences.save(widget.athleteId, mode);
     await Future<void>.delayed(Duration.zero);
     if (!mounted) return;
     if (mode != _selectedNomogramMode) return;

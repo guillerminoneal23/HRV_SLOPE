@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
 import 'package:hrv_slope_app/data/export/export_file_writer.dart';
+import 'package:hrv_slope_app/data/services/nomogram_mode_preference_service.dart';
 import 'package:hrv_slope_app/shared/engine/individual_report_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
@@ -38,6 +39,9 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
   String? _error;
   String? _nomogramRefreshError;
 
+  NomogramModePreferenceService get _nomogramModePreferences =>
+      NomogramModePreferenceService(widget.database.settingsDao);
+
   @override
   void initState() {
     super.initState();
@@ -52,7 +56,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
 
   Future<void> _load({bool refreshNomogram = false}) async {
     final keepCurrentReport = refreshNomogram && _report != null;
-    final requestedMode = _selectedNomogramMode;
+    var requestedMode = _selectedNomogramMode;
 
     if (mounted && (keepCurrentReport || !_loading)) {
       setState(() {
@@ -79,6 +83,12 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
           });
         }
         return;
+      }
+
+      if (!refreshNomogram && _report == null) {
+        requestedMode = await _nomogramModePreferences.load(detail.athlete.id);
+        if (!mounted) return;
+        _selectedNomogramMode = requestedMode;
       }
 
       // Get active nomogram preset from settings
@@ -119,6 +129,18 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         });
       }
     }
+  }
+
+  Future<void> _applyNomogramMode(NomogramMode mode) async {
+    if (mode == _selectedNomogramMode) return;
+    final athleteId = _athleteId;
+    if (athleteId == null) return;
+    setState(() {
+      _selectedNomogramMode = mode;
+    });
+    await _nomogramModePreferences.save(athleteId, mode);
+    if (!mounted || mode != _selectedNomogramMode) return;
+    await _load(refreshNomogram: true);
   }
 
   @override
@@ -196,14 +218,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
             selected: {_selectedNomogramMode},
             onSelectionChanged: _refreshingNomogram
                 ? null
-                : (selection) {
-                    final mode = selection.first;
-                    if (mode == _selectedNomogramMode) return;
-                    setState(() {
-                      _selectedNomogramMode = mode;
-                    });
-                    _load(refreshNomogram: true);
-                  },
+                : (selection) => _applyNomogramMode(selection.first),
           ),
         ),
         if (_refreshingNomogram) ...[

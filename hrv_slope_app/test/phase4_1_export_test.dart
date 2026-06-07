@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart'
     hide NomogramModel;
 import 'package:hrv_slope_app/data/export/csv_export_service.dart';
+import 'package:hrv_slope_app/data/services/nomogram_mode_preference_service.dart';
 import 'package:hrv_slope_app/shared/engine/group_report_builder.dart';
 import 'package:hrv_slope_app/shared/engine/individual_nomogram_builder.dart';
 import 'package:hrv_slope_app/shared/engine/individual_report_builder.dart';
@@ -430,6 +431,34 @@ void main() {
       );
     });
 
+    testWidgets('individual report loads saved hybrid mode', (tester) async {
+      await NomogramModePreferenceService(
+        db.settingsDao,
+      ).save(athleteId, NomogramMode.hybrid);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualReportScreen(database: db, sessionId: sessionId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Model selection'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<SegmentedButton<NomogramMode>>(
+              find.byType(SegmentedButton<NomogramMode>),
+            )
+            .selected,
+        {NomogramMode.hybrid},
+      );
+    });
+
     testWidgets('changing selector requests hybrid mode and shows fallback', (
       tester,
     ) async {
@@ -468,6 +497,10 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        await NomogramModePreferenceService(db.settingsDao).load(athleteId),
+        NomogramMode.hybrid,
+      );
     });
 
     testWidgets('individual unavailable shows readiness helper text', (
@@ -502,6 +535,10 @@ void main() {
 
       expect(find.text('Individual model not available yet:'), findsOneWidget);
       expect(find.textContaining('Valid sessions:'), findsOneWidget);
+      expect(
+        await NomogramModePreferenceService(db.settingsDao).load(athleteId),
+        NomogramMode.individual,
+      );
     });
 
     testWidgets('extrapolated individual report displays model warning', (

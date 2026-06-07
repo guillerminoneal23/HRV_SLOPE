@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
+import 'package:hrv_slope_app/data/services/nomogram_mode_preference_service.dart';
 import 'package:hrv_slope_app/shared/engine/individual_nomogram_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
@@ -573,6 +574,39 @@ void main() {
       expect(find.text('Requested model'), findsOneWidget);
       expect(find.text('Active model'), findsOneWidget);
       expect(find.text('Individual model not available yet:'), findsOneWidget);
+      expect(
+        await NomogramModePreferenceService(db.settingsDao).load(athleteId),
+        NomogramMode.individual,
+      );
+    });
+
+    testWidgets('individual nomogram loads saved hybrid mode', (tester) async {
+      await _seedSession(db, athleteId, intensity: 80, slope: 0.5);
+      await NomogramModePreferenceService(
+        db.settingsDao,
+      ).save(athleteId, NomogramMode.hybrid);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: IndividualNomogramScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Model selection'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<SegmentedButton<NomogramMode>>(
+              find.byType(SegmentedButton<NomogramMode>),
+            )
+            .selected,
+        {NomogramMode.hybrid},
+      );
     });
 
     test('no medical diagnostic language', () {

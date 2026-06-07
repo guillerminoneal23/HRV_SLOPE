@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
+import 'package:hrv_slope_app/data/services/nomogram_mode_preference_service.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
@@ -1277,6 +1278,37 @@ void main() {
       expect(find.text('Color points by recovery status'), findsOneWidget);
     });
 
+    testWidgets('longitudinal dashboard loads saved hybrid mode', (
+      tester,
+    ) async {
+      await _seedSession(db, athleteId, slope: 0.5);
+      await NomogramModePreferenceService(
+        db.settingsDao,
+      ).save(athleteId, NomogramMode.hybrid);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AthleteLongitudinalScreen(database: db, athleteId: athleteId),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Model selection'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<SegmentedButton<NomogramMode>>(
+              find.byType(SegmentedButton<NomogramMode>),
+            )
+            .selected,
+        {NomogramMode.hybrid},
+      );
+    });
+
     testWidgets('changing longitudinal model keeps reference area visible', (
       tester,
     ) async {
@@ -1308,6 +1340,10 @@ void main() {
           'Requested hybrid model is not available yet. Using study model.',
         ),
         findsOneWidget,
+      );
+      expect(
+        await NomogramModePreferenceService(db.settingsDao).load(athleteId),
+        NomogramMode.hybrid,
       );
     });
 
@@ -1342,6 +1378,10 @@ void main() {
       );
       expect(find.text('Individual model not available yet:'), findsOneWidget);
       expect(find.textContaining('Valid sessions:'), findsOneWidget);
+      expect(
+        await NomogramModePreferenceService(db.settingsDao).load(athleteId),
+        NomogramMode.individual,
+      );
     });
 
     testWidgets('zone color toggle disables Slope and ITL zone colors', (
