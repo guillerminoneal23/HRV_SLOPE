@@ -969,7 +969,7 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
                   Expanded(child: Text('Color points by recovery status')),
                   Tooltip(
                     message:
-                        "Points are colored by the session's recovery status. The reference is calculated per session from primary intensity.",
+                        'Recovery status classifies the observed response against the active model bands.',
                     triggerMode: TooltipTriggerMode.tap,
                     child: Icon(Icons.help_outline, size: 18),
                   ),
@@ -1004,15 +1004,25 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
             segments: const [
               ButtonSegment(
                 value: NomogramMode.population,
-                label: Text('Study model'),
+                label: Tooltip(
+                  message: 'Uses the study reference only.',
+                  child: Text('Study model'),
+                ),
               ),
               ButtonSegment(
                 value: NomogramMode.hybrid,
-                label: Text('Hybrid model'),
+                label: Tooltip(
+                  message: 'Blends athlete history with the study reference.',
+                  child: Text('Hybrid model'),
+                ),
               ),
               ButtonSegment(
                 value: NomogramMode.individual,
-                label: Text('Individual model'),
+                label: Tooltip(
+                  message:
+                      'Uses athlete-specific bands when readiness requirements are met.',
+                  child: Text('Individual model'),
+                ),
               ),
             ],
             selected: {_selectedNomogramMode},
@@ -1066,13 +1076,12 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
             'Blend',
             '${reference.athleteWeightPercent.toStringAsFixed(0)}% athlete / '
                 '${reference.populationWeightPercent.toStringAsFixed(0)}% study',
-            help:
-                'Percentage contribution from athlete history and study reference.',
+            help: 'Contribution from athlete history and the study reference.',
           ),
           if (reference.requestedMode != reference.activeMode)
             _referenceInfo(
-              'Requested ${_modeLabel(reference.requestedMode).toLowerCase()} is not available yet. '
-              'Using ${_modeLabel(reference.activeMode).toLowerCase()}.',
+              '${_modeLabel(reference.requestedMode)} is not available yet. '
+              'Using ${_modeLabel(reference.activeMode)}.',
             ),
           if (reference.activeMode == NomogramMode.hybrid)
             _referenceInfo(
@@ -1080,7 +1089,9 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
             ),
           if (reference.hasExtrapolatedPoints)
             _referenceInfo(
-              'Estimated zone: some intensities are outside the validated reference range.',
+              'Estimated zone: some intensities are outside the validated range; interpret cautiously.',
+              help:
+                  'Values outside the validated reference range should be interpreted cautiously.',
             ),
           for (final warning in reference.warnings)
             if (!reference.hasExtrapolatedPoints ||
@@ -1110,13 +1121,24 @@ class _AthleteLongitudinalScreenState extends State<AthleteLongitudinalScreen> {
     );
   }
 
-  Widget _referenceInfo(String text) {
+  Widget _referenceInfo(String text, {String? help}) {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline, size: 14, color: AppColors.warning),
+          if (help == null)
+            const Icon(Icons.info_outline, size: 14, color: AppColors.warning)
+          else
+            Tooltip(
+              message: help,
+              triggerMode: TooltipTriggerMode.tap,
+              child: const Icon(
+                Icons.help_outline,
+                size: 14,
+                color: AppColors.warning,
+              ),
+            ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(

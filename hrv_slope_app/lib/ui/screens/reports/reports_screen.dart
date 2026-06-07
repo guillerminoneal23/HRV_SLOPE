@@ -50,8 +50,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
           _reportTile(
             context,
             icon: Icons.auto_graph,
-            title: 'Population Nomogram',
-            subtitle: 'View population bands and eligible session points.',
+            title: 'Study Nomogram',
+            subtitle: 'View study reference bands and eligible session points.',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => PopulationNomogramScreen(database: _db),

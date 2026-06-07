@@ -499,9 +499,9 @@ class _NomogramChartState extends State<NomogramChart> {
           _legendItem('Session points', AppColors.tertiary, isDot: true),
         if (widget.showIndividualCurve &&
             widget.individualCurvePoints.isNotEmpty)
-          _legendItem('Individual fit', AppColors.tertiary),
+          _legendItem('Individual model', AppColors.tertiary),
         if (widget.showHybridCurve && widget.hybridCurvePoints.isNotEmpty)
-          _legendItem('Hybrid expected', AppColors.secondary),
+          _legendItem('Hybrid model', AppColors.secondary),
       ],
     );
   }

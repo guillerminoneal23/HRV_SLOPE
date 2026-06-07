@@ -80,7 +80,7 @@ class _PopulationNomogramScreenState extends State<PopulationNomogramScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Population Nomogram'),
+        title: const Text('Study Nomogram'),
         actions: [
           IconButton(
             tooltip: 'Export CSV',

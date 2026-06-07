@@ -268,7 +268,7 @@ void main() {
       },
     );
 
-    testWidgets('insufficient data state renders population-only guidance', (
+    testWidgets('insufficient data state renders study model guidance', (
       tester,
     ) async {
       await _seedSession(db, athleteId, intensity: 80, slope: 0.5);
@@ -281,11 +281,11 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.scrollUntilVisible(
-        find.textContaining('Population-only mode'),
+        find.textContaining('Study model:'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.textContaining('Population-only mode'), findsOneWidget);
+      expect(find.textContaining('Study model:'), findsOneWidget);
     });
 
     testWidgets('robust data state renders model metadata without overlays', (
@@ -418,7 +418,7 @@ void main() {
       expect(find.text('Date from'), findsOneWidget);
       expect(find.text('Date to'), findsOneWidget);
       expect(find.textContaining('Intensity:'), findsWidgets);
-      expect(find.text('Response'), findsOneWidget);
+      expect(find.text('Recovery status'), findsOneWidget);
       expect(find.text('Apply filters'), findsOneWidget);
       expect(find.text('Viewport'), findsOneWidget);
     });

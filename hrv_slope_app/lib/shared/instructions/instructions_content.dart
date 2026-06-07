@@ -63,8 +63,8 @@ const List<InstructionChapter> instructionsChapters = [
         title: 'What question does the app answer?',
         summary: 'How did the athlete recover relative to the session demand?',
         body:
-            'The app compares observed RMSSD-Slope with population, '
-            'individual, and hybrid references when enough data are available. '
+            'The app compares observed RMSSD-Slope with Study, Hybrid, or '
+            'Individual model bands. '
             'It helps review whether the post-effort response was '
             'lower-than-expected, expected, or favorable compared with '
             'reference behavior for the recorded intensity.',
@@ -397,31 +397,70 @@ const List<InstructionChapter> instructionsChapters = [
             'as negative without the slope response.',
       ),
       InstructionSection(
-        id: 'population_nomogram',
-        title: 'Population nomogram',
+        id: 'study_model',
+        title: 'Study model',
+        summary: 'The Study model uses the study reference only.',
+        body:
+            'The Study model provides lower, mean, and upper expected slope '
+            'bands from the selected study preset. It remains available when '
+            'athlete-specific history is limited.',
+      ),
+      InstructionSection(
+        id: 'hybrid_model',
+        title: 'Hybrid model',
+        summary: 'The Hybrid model blends athlete history and study reference.',
+        body:
+            'The Hybrid model gradually adds athlete history while retaining '
+            'the study reference. Lower, mean, and upper bands are the active '
+            'blended bands; no extra hybrid curve is drawn.',
+      ),
+      InstructionSection(
+        id: 'individual_model',
+        title: 'Individual model and readiness',
+        summary: 'Athlete-specific bands require sufficient valid history.',
+        body:
+            'The Individual model uses athlete-specific bands when readiness '
+            'requirements are met. Readiness considers valid sessions, '
+            'intensity coverage, repeated measurements, and model stability. '
+            'Until then, the active model may fall back to Hybrid or Study.',
+      ),
+      InstructionSection(
+        id: 'requested_active_blend',
+        title: 'Requested model, Active model, and Blend',
+        summary: 'The selected model may differ from the model currently used.',
+        body:
+            'Requested model is the user selection. Active model is the model '
+            'actually used after readiness and fallback rules. Blend shows '
+            'the contribution from athlete history and the study reference.',
+      ),
+      InstructionSection(
+        id: 'estimated_zone',
+        title: 'Estimated zone and validated range',
+        summary: 'Estimated values require cautious interpretation.',
+        body:
+            'Estimated zone means an intensity is outside the validated '
+            'reference range. The app can still calculate a result, but it '
+            'should be interpreted cautiously.',
+      ),
+      InstructionSection(
+        id: 'nomogram_controls',
+        title: 'Nomogram viewport and filters',
+        summary: 'Inspect points without changing the underlying model.',
+        body:
+            'Viewport controls adjust the visible intensity and slope ranges; '
+            'Reset view returns to the fitted view. Individual Nomogram '
+            'filters limit the visible session points and Valid Points list. '
+            'Neither control changes model fitting, readiness, or active bands.',
+      ),
+      InstructionSection(
+        id: 'recovery_status',
+        title: 'Recovery status',
         summary:
-            'Population bands provide a reference when individual history is limited.',
+            'Recovery status compares the observed response with active bands.',
         body:
-            'The population nomogram shows lower, mean, and upper expected '
-            'slope bands for the selected preset.',
-      ),
-      InstructionSection(
-        id: 'individual_nomogram',
-        title: 'Individual nomogram',
-        summary: 'Athlete-specific references need enough data.',
-        body:
-            'Individual nomogram confidence levels are insufficient, initial, '
-            'acceptable, and robust. Confidence depends on valid session count '
-            'and low, medium, and high intensity spread.',
-      ),
-      InstructionSection(
-        id: 'hybrid_mode',
-        title: 'Hybrid mode',
-        summary: 'Hybrid mode blends population and athlete history.',
-        body:
-            'Hybrid mode is used while individual data are accumulating but '
-            'are not robust. It keeps population context while adding athlete '
-            'history.',
+            'Recovery status classifies the observed response as '
+            'lower-than-expected, expected, favorable, or unavailable against '
+            'the active model bands.',
       ),
       InstructionSection(
         id: 'residuals',
@@ -462,7 +501,7 @@ const List<InstructionChapter> instructionsChapters = [
         body:
             'The individual report shows athlete, session, load variables, HRV '
             'data, raw slope, interpreted slope, ITL, recovery response, and '
-            'population nomogram placement.',
+            'active model placement.',
       ),
       InstructionSection(
         id: 'group_report',
@@ -474,11 +513,11 @@ const List<InstructionChapter> instructionsChapters = [
             'response relative to the reference.',
       ),
       InstructionSection(
-        id: 'population_screen',
-        title: 'Population nomogram',
-        summary: 'View population bands and eligible session points.',
+        id: 'study_screen',
+        title: 'Study nomogram',
+        summary: 'View study reference bands and eligible session points.',
         body:
-            'The standalone population nomogram can show all eligible sessions '
+            'The standalone Study nomogram can show all eligible sessions '
             'or filter by athlete.',
       ),
       InstructionSection(
@@ -492,10 +531,11 @@ const List<InstructionChapter> instructionsChapters = [
       InstructionSection(
         id: 'individual_nomogram_screen',
         title: 'Individual nomogram',
-        summary: 'Review population, individual, and hybrid references.',
+        summary: 'Review Study, Hybrid, and Individual models.',
         body:
             'The individual nomogram screen shows confidence, data needs, '
-            'valid points, excluded sessions, and curve overlays.',
+            'model selection, active bands, viewport controls, point filters, '
+            'valid points, and excluded sessions.',
       ),
       InstructionSection(
         id: 'csv_exports',
@@ -503,7 +543,7 @@ const List<InstructionChapter> instructionsChapters = [
         summary: 'CSV exports are available for analysis.',
         body:
             'CSV exports are available for individual reports, group reports, '
-            'longitudinal dashboards, individual nomograms, and population '
+            'longitudinal dashboards, individual nomograms, and study '
             'nomogram curve points.',
       ),
       InstructionSection(
@@ -540,8 +580,9 @@ const List<InstructionChapter> instructionsChapters = [
         summary:
             'Individual models require valid sessions and intensity spread.',
         body:
-            'Individual references should not be treated as primary until '
-            'confidence is robust.',
+            'The Individual model becomes active only when readiness '
+            'requirements are met. Until then, the app uses Hybrid or Study '
+            'model bands.',
       ),
       InstructionSection(
         id: 'artifacts_corrections',

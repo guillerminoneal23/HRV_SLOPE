@@ -82,6 +82,23 @@ void main() {
       );
     });
 
+    test('nomogram model system and controls are explained', () {
+      final text = allInstructionText();
+
+      expect(text, contains('The Study model uses the study reference only'));
+      expect(text, contains('no extra hybrid curve is drawn'));
+      expect(text, contains('Individual model uses athlete-specific bands'));
+      expect(text, contains('Requested model is the user selection'));
+      expect(text, contains('Active model is the model actually used'));
+      expect(text, contains('Estimated zone means an intensity is outside'));
+      expect(text, contains('Viewport controls adjust the visible intensity'));
+      expect(text, contains('Individual Nomogram filters limit'));
+      expect(
+        text,
+        contains('Recovery status classifies the observed response'),
+      );
+    });
+
     test('forbidden medical diagnostic claims are absent', () {
       final text = allInstructionText().toLowerCase();
 

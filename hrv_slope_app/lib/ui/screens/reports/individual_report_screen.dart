@@ -204,15 +204,25 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
             segments: const [
               ButtonSegment(
                 value: NomogramMode.population,
-                label: Text('Study model'),
+                label: Tooltip(
+                  message: 'Uses the study reference only.',
+                  child: Text('Study model'),
+                ),
               ),
               ButtonSegment(
                 value: NomogramMode.hybrid,
-                label: Text('Hybrid model'),
+                label: Tooltip(
+                  message: 'Blends athlete history with the study reference.',
+                  child: Text('Hybrid model'),
+                ),
               ),
               ButtonSegment(
                 value: NomogramMode.individual,
-                label: Text('Individual model'),
+                label: Tooltip(
+                  message:
+                      'Uses athlete-specific bands when readiness requirements are met.',
+                  child: Text('Individual model'),
+                ),
               ),
             ],
             selected: {_selectedNomogramMode},
@@ -477,7 +487,8 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
             _classificationChip(
               n.classification,
               n.classificationLabel,
-              help: 'Classification based on the selected model bands.',
+              help:
+                  'Recovery status classifies the observed response against the active model bands.',
             ),
             const SizedBox(height: 8),
             Container(
@@ -530,7 +541,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         const SizedBox(height: 12),
         _buildNomogramModelMetadata(n),
         const Divider(height: 20),
-        _row('Preset', n.presetName),
+        _row('Study preset', n.presetName),
         _row(
           'Expected lower',
           n.expectedLower.toStringAsFixed(3),
@@ -548,13 +559,14 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
         ),
         _row('Observed slope', n.observedSlope.toStringAsFixed(3)),
         _row(
-          'Response',
+          'Recovery status',
           n.classificationLabel,
-          help: 'Classification based on the selected model bands.',
+          help:
+              'Classification of observed response against the active model bands.',
         ),
         if (n.activeMode != NomogramMode.population)
           _infoChip(
-            'Chart background shows the study reference; values above use the active model.',
+            'Expected values use the active model. The chart background shows the study reference.',
           ),
         const SizedBox(height: 16),
         // The chart
@@ -589,7 +601,7 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
           _row(
             'Requested model',
             _modeLabel(n.requestedMode),
-            help: 'Model selected for this report calculation.',
+            help: 'Model selected by the user.',
           ),
           _row(
             'Active model',
@@ -600,12 +612,15 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
             'Blend',
             '${n.athleteWeightPercent.toStringAsFixed(0)}% athlete / '
                 '${n.populationWeightPercent.toStringAsFixed(0)}% study',
+            help: 'Contribution from athlete history and the study reference.',
           ),
           if (n.requestedMode != n.activeMode)
             _infoChip(_fallbackMessage(n.requestedMode, n.activeMode)),
           if (n.isExtrapolated)
             _infoChip(
-              'Estimated zone: intensity is outside the validated reference range.',
+              'Estimated zone: intensity is outside the validated range; interpret cautiously.',
+              help:
+                  'Values outside the validated reference range should be interpreted cautiously.',
             ),
           if (notes.isNotEmpty) ...[
             const SizedBox(height: 6),
@@ -805,12 +820,23 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
     );
   }
 
-  Widget _infoChip(String text) {
+  Widget _infoChip(String text, {String? help}) {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
-          const Icon(Icons.info_outline, size: 14, color: AppColors.warning),
+          if (help == null)
+            const Icon(Icons.info_outline, size: 14, color: AppColors.warning)
+          else
+            Tooltip(
+              message: help,
+              triggerMode: TooltipTriggerMode.tap,
+              child: const Icon(
+                Icons.help_outline,
+                size: 14,
+                color: AppColors.warning,
+              ),
+            ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -867,8 +893,8 @@ class _IndividualReportScreenState extends State<IndividualReportScreen> {
   }
 
   String _fallbackMessage(NomogramMode requested, NomogramMode active) {
-    return 'Requested ${_modeLabel(requested).toLowerCase()} is not available yet. '
-        'Using ${_modeLabel(active).toLowerCase()}.';
+    return '${_modeLabel(requested)} is not available yet. '
+        'Using ${_modeLabel(active)}.';
   }
 
   List<String> _modelNotes(NomogramReportSummary n) {

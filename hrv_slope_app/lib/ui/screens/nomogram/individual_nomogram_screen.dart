@@ -216,14 +216,14 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
                     ],
                   ),
                 ),
-                Chip(label: Text(data.summary.recommendedMode.label)),
+                Chip(label: Text(_recommendedModeLabel(data))),
               ],
             ),
             const Divider(height: 20),
             _row('Valid points', '${data.summary.validPointCount}'),
             _row('Confidence', data.summary.confidenceLabel),
-            _row('Recommended mode', data.summary.recommendedMode.label),
-            _row('Population preset', data.populationPreset.presetName),
+            _row('Recommended mode', _recommendedModeLabel(data)),
+            _row('Study preset', data.populationPreset.presetName),
           ],
         ),
       ),
@@ -247,24 +247,16 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _chip('Low zone', data.summary.lowZoneCount),
-                _chip('Medium zone', data.summary.mediumZoneCount),
-                _chip('High zone', data.summary.highZoneCount),
-                _chip(
-                  'Individual weight',
-                  data.hybridWeightIndividual,
-                  digits: 1,
-                ),
-                _chip(
-                  'Population weight',
-                  data.hybridWeightPopulation,
-                  digits: 1,
-                ),
+                _chip('Low intensity', data.summary.lowZoneCount),
+                _chip('Medium intensity', data.summary.mediumZoneCount),
+                _chip('High intensity', data.summary.highZoneCount),
+                _chip('Athlete weight', data.hybridWeightIndividual, digits: 1),
+                _chip('Study weight', data.hybridWeightPopulation, digits: 1),
               ],
             ),
             const SizedBox(height: 12),
             Text(
-              data.summary.explanationText,
+              _confidenceGuidance(data),
               style: const TextStyle(color: AppColors.textSecondary),
             ),
           ],
@@ -391,15 +383,25 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
             segments: const [
               ButtonSegment(
                 value: NomogramMode.population,
-                label: Text('Study model'),
+                label: Tooltip(
+                  message: 'Uses the study reference only.',
+                  child: Text('Study model'),
+                ),
               ),
               ButtonSegment(
                 value: NomogramMode.hybrid,
-                label: Text('Hybrid model'),
+                label: Tooltip(
+                  message: 'Blends athlete history with the study reference.',
+                  child: Text('Hybrid model'),
+                ),
               ),
               ButtonSegment(
                 value: NomogramMode.individual,
-                label: Text('Individual model'),
+                label: Tooltip(
+                  message:
+                      'Uses athlete-specific bands when readiness requirements are met.',
+                  child: Text('Individual model'),
+                ),
               ),
             ],
             selected: {selected},
@@ -453,14 +455,13 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
             'Blend',
             '${data.athleteWeightPercent.toStringAsFixed(0)}% athlete / '
                 '${data.populationWeightPercent.toStringAsFixed(0)}% study',
-            help:
-                'Percentage contribution from athlete history and study reference.',
+            help: 'Contribution from athlete history and the study reference.',
           ),
-          _row('Preset', data.populationPreset.presetName),
+          _row('Study preset', data.populationPreset.presetName),
           if (data.requestedMode != data.activeMode)
             _referenceInfo(
-              'Requested ${_modeLabel(data.requestedMode).toLowerCase()} is not available yet. '
-              'Using ${_modeLabel(data.activeMode).toLowerCase()}.',
+              '${_modeLabel(data.requestedMode)} is not available yet. '
+              'Using ${_modeLabel(data.activeMode)}.',
             ),
           if (data.activeMode == NomogramMode.hybrid)
             _referenceInfo(
@@ -468,7 +469,9 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
             ),
           if (data.hasExtrapolatedPoints)
             _referenceInfo(
-              'Estimated zone: some intensities are outside the validated reference range.',
+              'Estimated zone: some intensities are outside the validated range; interpret cautiously.',
+              help:
+                  'Values outside the validated reference range should be interpreted cautiously.',
             ),
           for (final warning in data.modelWarnings)
             if (!data.hasExtrapolatedPoints ||
@@ -498,13 +501,24 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
     );
   }
 
-  Widget _referenceInfo(String text) {
+  Widget _referenceInfo(String text, {String? help}) {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline, size: 14, color: AppColors.warning),
+          if (help == null)
+            const Icon(Icons.info_outline, size: 14, color: AppColors.warning)
+          else
+            Tooltip(
+              message: help,
+              triggerMode: TooltipTriggerMode.tap,
+              child: const Icon(
+                Icons.help_outline,
+                size: 14,
+                color: AppColors.warning,
+              ),
+            ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -718,7 +732,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
                     const Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Response',
+                        'Recovery status',
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
@@ -810,7 +824,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
       if (_filterIntensityRange != null)
         'Intensity: ${_filterNumber(_filterIntensityRange!.start)}-${_filterNumber(_filterIntensityRange!.end)}%',
       if (_filterResponseCategories != null)
-        'Response: ${_filterResponseCategories!.join(', ')}',
+        'Recovery status: ${_filterResponseCategories!.join(', ')}',
     ];
     if (labels.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -879,7 +893,7 @@ class _IndividualNomogramScreenState extends State<IndividualNomogramScreen> {
                       point.date,
                       '${point.intensityPercent.toStringAsFixed(1)}%',
                       'Slope ${point.interpretedSlope.toStringAsFixed(3)}',
-                      'Population residual ${_fixed(point.residualPopulation, 3)}',
+                      'Study residual ${_fixed(point.residualPopulation, 3)}',
                       if (point.residualIndividual != null)
                         'Individual residual ${_fixed(point.residualIndividual, 3)}',
                       if (point.residualHybrid != null)
@@ -992,11 +1006,33 @@ Widget _chip(String label, num value, {int digits = 0}) {
 String _modeGuidance(IndividualNomogramData data) {
   switch (data.activeMode) {
     case NomogramMode.population:
-      return 'Population-only mode: athlete points are shown, but no individual curve is used yet.';
+      return 'Study model: lower, mean, and upper bands use the study reference.';
     case NomogramMode.hybrid:
       return 'Hybrid mode: lower, mean, and upper bands blend athlete history with the study reference.';
     case NomogramMode.individual:
-      return 'Individual model mode: lower, mean, and upper bands use the athlete-specific fit.';
+      return 'Individual model: lower, mean, and upper bands use athlete-specific history.';
+  }
+}
+
+String _recommendedModeLabel(IndividualNomogramData data) {
+  switch (data.summary.recommendedMode) {
+    case IndividualNomogramRecommendedMode.populationOnly:
+      return 'Study model';
+    case IndividualNomogramRecommendedMode.hybrid:
+      return 'Hybrid model';
+    case IndividualNomogramRecommendedMode.individual:
+      return 'Individual model';
+  }
+}
+
+String _confidenceGuidance(IndividualNomogramData data) {
+  switch (data.summary.recommendedMode) {
+    case IndividualNomogramRecommendedMode.populationOnly:
+      return 'Use the Study model while more valid athlete history is collected.';
+    case IndividualNomogramRecommendedMode.hybrid:
+      return 'Use the Hybrid model while athlete-specific confidence develops.';
+    case IndividualNomogramRecommendedMode.individual:
+      return 'The athlete history supports the Individual model.';
   }
 }
 

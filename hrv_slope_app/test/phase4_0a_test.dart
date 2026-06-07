@@ -1260,7 +1260,7 @@ void main() {
       );
       expect(
         find.byTooltip(
-          'Percentage contribution from athlete history and study reference.',
+          'Contribution from athlete history and the study reference.',
         ),
         findsOneWidget,
       );
@@ -1276,6 +1276,12 @@ void main() {
       expect(find.textContaining('Showing 2 of 2 points'), findsNothing);
       expect(find.byType(NomogramChart), findsNothing);
       expect(find.text('Color points by recovery status'), findsOneWidget);
+      expect(
+        find.byTooltip(
+          'Recovery status classifies the observed response against the active model bands.',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('longitudinal dashboard loads saved hybrid mode', (
@@ -1336,9 +1342,7 @@ void main() {
       expect(find.text('Requested model'), findsOneWidget);
       expect(find.text('Hybrid model'), findsWidgets);
       expect(
-        find.text(
-          'Requested hybrid model is not available yet. Using study model.',
-        ),
+        find.text('Hybrid model is not available yet. Using Study model.'),
         findsOneWidget,
       );
       expect(
@@ -1371,9 +1375,7 @@ void main() {
 
       expect(find.text('Model selection'), findsOneWidget);
       expect(
-        find.text(
-          'Requested individual model is not available yet. Using study model.',
-        ),
+        find.text('Individual model is not available yet. Using Study model.'),
         findsOneWidget,
       );
       expect(find.text('Individual model not available yet:'), findsOneWidget);

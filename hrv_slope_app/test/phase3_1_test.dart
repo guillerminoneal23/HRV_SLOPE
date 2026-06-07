@@ -455,6 +455,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('Study Nomogram'), findsOneWidget);
       expect(find.text('excel_operational'), findsOneWidget);
     });
 

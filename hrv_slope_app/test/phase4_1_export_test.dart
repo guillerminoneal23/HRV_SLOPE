@@ -419,14 +419,22 @@ void main() {
       expect(find.text('Study model'), findsWidgets);
       expect(find.text('Hybrid model'), findsOneWidget);
       expect(find.text('Individual model'), findsOneWidget);
-      expect(
-        find.byTooltip('Model selected for this report calculation.'),
-        findsOneWidget,
-      );
+      expect(find.byTooltip('Model selected by the user.'), findsOneWidget);
       expect(
         find.byTooltip(
           'Model actually used after readiness and fallback rules.',
         ),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip(
+          'Contribution from athlete history and the study reference.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('Uses the study reference only.'), findsOneWidget);
+      expect(
+        find.byTooltip('Blends athlete history with the study reference.'),
         findsOneWidget,
       );
     });
@@ -492,9 +500,7 @@ void main() {
       expect(find.text('Requested model'), findsWidgets);
       expect(find.text('Hybrid model'), findsWidgets);
       expect(
-        find.text(
-          'Requested hybrid model is not available yet. Using study model.',
-        ),
+        find.text('Hybrid model is not available yet. Using Study model.'),
         findsOneWidget,
       );
       expect(
@@ -554,7 +560,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text(
-          'Estimated zone: intensity is outside the validated reference range.',
+          'Estimated zone: intensity is outside the validated range; interpret cautiously.',
         ),
         300,
         scrollable: find.byType(Scrollable).first,
@@ -563,7 +569,13 @@ void main() {
 
       expect(
         find.text(
-          'Estimated zone: intensity is outside the validated reference range.',
+          'Estimated zone: intensity is outside the validated range; interpret cautiously.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip(
+          'Values outside the validated reference range should be interpreted cautiously.',
         ),
         findsOneWidget,
       );

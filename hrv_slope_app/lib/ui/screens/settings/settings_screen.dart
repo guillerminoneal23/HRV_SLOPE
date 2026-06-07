@@ -50,7 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _preset = source);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Nomogram preset set to ${source.presetName}')),
+        SnackBar(content: Text('Study preset set to ${source.presetName}')),
       );
     }
   }
@@ -65,7 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 Text(
-                  'Population Nomogram Preset',
+                  'Study Reference Preset',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 4),
@@ -116,7 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                             const SizedBox(width: 8),
                             const Text(
-                              'Current Preset',
+                              'Current study preset',
                               style: TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ],
