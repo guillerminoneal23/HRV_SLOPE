@@ -9,6 +9,7 @@ import 'package:hrv_slope_app/shared/engine/individual_nomogram_builder.dart';
 import 'package:hrv_slope_app/shared/engine/individual_report_builder.dart';
 import 'package:hrv_slope_app/shared/engine/longitudinal_builder.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
+import 'package:hrv_slope_app/shared/engine/nomogram_mode.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 
 String csvField(Object? value) {
@@ -88,6 +89,11 @@ CsvExportData exportIndividualReportCsv(
     'rr_quality_decision',
     'rr_rmssd_delta_percent',
     'report_warnings',
+    'requested_nomogram_mode',
+    'active_nomogram_mode',
+    'athlete_weight_percent',
+    'study_weight_percent',
+    'is_extrapolated',
   ];
 
   final hrv = data.hrvSummary;
@@ -151,6 +157,11 @@ CsvExportData exportIndividualReportCsv(
       hrv.rrQualityDecision,
       hrv.rrRmssdDeltaPercent,
       data.warnings.join('; '),
+      nomogram?.requestedMode.key,
+      nomogram?.activeMode.key,
+      nomogram?.athleteWeightPercent,
+      nomogram?.populationWeightPercent,
+      nomogram?.isExtrapolated,
     ],
   ];
 
@@ -326,6 +337,12 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
     'itl_rolling_14',
     'itl_rolling_28',
     'warnings',
+    'requested_nomogram_mode',
+    'active_nomogram_mode',
+    'athlete_weight_percent',
+    'study_weight_percent',
+    'is_extrapolated',
+    'nomogram_warnings',
   ];
   final filterSummary = series.activeFilterLabels.isEmpty
       ? 'No filters'
@@ -339,7 +356,7 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
   };
   final rows = <List<Object?>>[
     if (series.points.isEmpty && series.activeFilterLabels.isNotEmpty)
-      _emptyLongitudinalMetadataRow(series, filterSummary, headers.length),
+      _emptyLongitudinalMetadataRow(series, filterSummary, headers),
     for (var i = 0; i < series.points.length; i++)
       [
         filterSummary,
@@ -391,6 +408,12 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
         series.itlRolling14[i],
         series.itlRolling28[i],
         series.points[i].warnings.join('; '),
+        series.points[i].nomogramReference.requestedMode.key,
+        series.points[i].nomogramReference.activeMode.key,
+        series.points[i].nomogramReference.athleteWeightPercent,
+        series.points[i].nomogramReference.populationWeightPercent,
+        series.points[i].nomogramReference.isExtrapolated,
+        series.points[i].nomogramReference.warnings.join('; '),
       ],
   ];
   return CsvExportData(
@@ -406,12 +429,40 @@ CsvExportData exportLongitudinalCsv(LongitudinalSeries series) {
 List<Object?> _emptyLongitudinalMetadataRow(
   LongitudinalSeries series,
   String filterSummary,
-  int columnCount,
+  List<String> headers,
 ) {
-  final row = List<Object?>.filled(columnCount, '');
-  row[0] = filterSummary;
-  row[1] = series.athleteId;
-  row[2] = series.athleteName;
+  final row = List<Object?>.filled(headers.length, '');
+  void setValue(String header, Object? value) {
+    row[headers.indexOf(header)] = value;
+  }
+
+  setValue('filter_summary', filterSummary);
+  setValue('athlete_id', series.athleteId);
+  setValue('athlete_name', series.athleteName);
+  setValue(
+    'requested_nomogram_mode',
+    series.nomogramReferenceSeries.requestedMode.key,
+  );
+  setValue(
+    'active_nomogram_mode',
+    series.nomogramReferenceSeries.activeMode.key,
+  );
+  setValue(
+    'athlete_weight_percent',
+    series.nomogramReferenceSeries.athleteWeightPercent,
+  );
+  setValue(
+    'study_weight_percent',
+    series.nomogramReferenceSeries.populationWeightPercent,
+  );
+  setValue(
+    'is_extrapolated',
+    series.nomogramReferenceSeries.hasExtrapolatedPoints,
+  );
+  setValue(
+    'nomogram_warnings',
+    series.nomogramReferenceSeries.warnings.join('; '),
+  );
   return row;
 }
 
@@ -519,6 +570,12 @@ CsvExportData exportIndividualNomogramSummaryCsv(IndividualNomogramData data) {
     'model_b',
     'model_c',
     'r_squared',
+    'requested_nomogram_mode',
+    'active_nomogram_mode',
+    'athlete_weight_percent',
+    'study_weight_percent',
+    'is_extrapolated',
+    'nomogram_warnings',
   ];
   final rows = [
     [
@@ -535,6 +592,12 @@ CsvExportData exportIndividualNomogramSummaryCsv(IndividualNomogramData data) {
       data.fittedModel?.params.b,
       data.fittedModel?.params.c,
       data.fittedModel?.rSquared,
+      data.requestedMode.key,
+      data.activeMode.key,
+      data.athleteWeightPercent,
+      data.populationWeightPercent,
+      data.hasExtrapolatedPoints,
+      data.modelWarnings.join('; '),
     ],
   ];
   return CsvExportData(

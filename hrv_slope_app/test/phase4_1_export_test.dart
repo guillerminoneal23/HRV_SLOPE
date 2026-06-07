@@ -86,6 +86,31 @@ void main() {
       expect(export.content, contains('slope_Orellana_19'));
       expect(export.content, isNot(contains('paper_original_2019')));
     });
+
+    test('exports nomogram model traceability metadata', () {
+      final export = exportIndividualReportCsv(_individualReport());
+
+      expect(
+        export.content,
+        contains(
+          'requested_nomogram_mode,active_nomogram_mode,'
+          'athlete_weight_percent,study_weight_percent,is_extrapolated',
+        ),
+      );
+      expect(export.content, contains('nomogram_warnings'));
+      expect(
+        export.content,
+        contains('Check context,individual,hybrid,30,70,true'),
+      );
+    });
+
+    test('leaves nomogram warnings empty when none are present', () {
+      final export = exportIndividualReportCsv(
+        _individualReport(nomogramWarnings: const []),
+      );
+
+      expect(export.content, contains('488.235,,stored_summary'));
+    });
   });
 
   group('Group report export', () {
@@ -288,6 +313,14 @@ void main() {
         itlRolling14: [],
         itlRolling28: [],
         fatigueFlags: [],
+        nomogramReferenceSeries: LongitudinalNomogramReferenceSeries(
+          requestedMode: NomogramMode.individual,
+          activeMode: NomogramMode.hybrid,
+          athleteWeightPercent: 40,
+          populationWeightPercent: 60,
+          hasExtrapolatedPoints: true,
+          warnings: ['Estimated zone'],
+        ),
         summary: LongitudinalSummary(
           nSessions: 0,
           nComplete: 0,
@@ -303,6 +336,27 @@ void main() {
       expect(export.content, contains('rpe_slope_response_index'));
       expect(export.content, contains('Sport: Swimming'));
       expect(export.content, contains('Runner'));
+      expect(
+        export.content,
+        contains('individual,hybrid,40,60,true,Estimated zone'),
+      );
+    });
+
+    test('exports per-session nomogram model traceability metadata', () {
+      final export = exportLongitudinalCsv(_longitudinalSeries());
+
+      expect(
+        export.content,
+        contains(
+          'requested_nomogram_mode,active_nomogram_mode,'
+          'athlete_weight_percent,study_weight_percent,is_extrapolated,'
+          'nomogram_warnings',
+        ),
+      );
+      expect(
+        export.content,
+        contains('individual,hybrid,25,75,true,"Estimated zone; fallback"'),
+      );
     });
   });
 
@@ -324,6 +378,16 @@ void main() {
 
       expect(summary.content, contains('recommended_mode'));
       expect(summary.content, contains('hybrid'));
+      expect(summary.content, contains('requested_nomogram_mode'));
+      expect(summary.content, contains('active_nomogram_mode'));
+      expect(summary.content, contains('athlete_weight_percent'));
+      expect(summary.content, contains('study_weight_percent'));
+      expect(summary.content, contains('is_extrapolated'));
+      expect(summary.content, contains('nomogram_warnings'));
+      expect(
+        summary.content,
+        contains('individual,hybrid,30,70,true,"Estimated zone; fallback"'),
+      );
       expect(curves.content, contains('individual'));
       expect(curves.content, contains('hybrid'));
       expect(curves.content, isNot(contains('population_mean')));
@@ -700,6 +764,7 @@ void main() {
 
 IndividualReportData _individualReport({
   String presetName = 'excel_operational',
+  List<String> nomogramWarnings = const ['Check context'],
 }) {
   const classification = InternalLoadClassification.expectedResponse;
   return IndividualReportData(
@@ -743,6 +808,8 @@ IndividualReportData _individualReport({
       primaryIntensityMetric: 'speed_kmh_div_mas',
     ),
     nomogramSummary: NomogramReportSummary(
+      requestedMode: NomogramMode.individual,
+      activeMode: NomogramMode.hybrid,
       presetName: presetName,
       intensityPercent: 80,
       observedSlope: 2,
@@ -751,11 +818,14 @@ IndividualReportData _individualReport({
       expectedUpper: 0.72,
       residual: 1.66,
       residualPercent: 488.235,
+      athleteWeightPercent: 30,
+      populationWeightPercent: 70,
       classification: classification,
       classificationLabel: 'Expected recovery response',
       interpretationText:
           'The post-effort response is within the expected recovery-response band for this intensity.',
-      warnings: ['Check context'],
+      isExtrapolated: true,
+      warnings: nomogramWarnings,
     ),
     warnings: const ['Check context'],
     canShowNomogram: true,
@@ -858,6 +928,12 @@ LongitudinalSeries _longitudinalSeries() {
         upperItlThreshold: 5,
         zone: LongitudinalRecoveryZone.normal,
         source: 'slope_Orellana_19',
+        requestedMode: NomogramMode.individual,
+        activeMode: NomogramMode.hybrid,
+        athleteWeightPercent: 25,
+        populationWeightPercent: 75,
+        isExtrapolated: true,
+        warnings: ['Estimated zone', 'fallback'],
       ),
       rpe: 7,
       srpe: 420,
@@ -958,6 +1034,12 @@ IndividualNomogramData _individualNomogramData() {
     hybridCurvePoints: [
       IndividualNomogramCurvePoint(intensityPercent: 80, slope: 0.36),
     ],
+    requestedMode: NomogramMode.individual,
+    activeMode: NomogramMode.hybrid,
+    athleteWeightPercent: 30,
+    populationWeightPercent: 70,
+    modelWarnings: ['Estimated zone', 'fallback'],
+    hasExtrapolatedPoints: true,
     warnings: ['More data recommended'],
     summary: IndividualNomogramSummary(
       totalSessions: 2,
