@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
+import 'package:hrv_slope_app/data/database/daos/session_events_dao.dart';
+import 'package:hrv_slope_app/ui/screens/teams/session_event_detail_screen.dart';
 import 'package:hrv_slope_app/ui/screens/teams/team_form_dialog.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 
@@ -21,6 +23,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
   Team? _team;
   List<Athlete> _players = [];
   List<Athlete> _allAthletes = [];
+  List<SessionEventListItem> _recentEvents = [];
   Map<int, AthleteTeamAssignment> _assignmentsByAthlete = {};
   Map<int, Team> _teamsById = {};
   bool _loading = true;
@@ -41,11 +44,14 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
     final teams = await widget.database.teamsDao.getAllTeams(
       includeArchived: true,
     );
+    final recentEvents = await widget.database.sessionEventsDao
+        .getRecentEventsForTeamWithCounts(widget.teamId, limit: 5);
     if (!mounted) return;
     setState(() {
       _team = team;
       _players = players;
       _allAthletes = allAthletes;
+      _recentEvents = recentEvents;
       _assignmentsByAthlete = {
         for (final assignment in assignments) assignment.athleteId: assignment,
       };
@@ -152,6 +158,8 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          _RecentEventsSection(events: _recentEvents, onOpen: _openEvent),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -235,6 +243,81 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
       );
     }
     await _load();
+  }
+
+  void _openEvent(SessionEventListItem item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SessionEventDetailScreen(
+          database: widget.database,
+          eventId: item.event.id,
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentEventsSection extends StatelessWidget {
+  final List<SessionEventListItem> events;
+  final ValueChanged<SessionEventListItem> onOpen;
+
+  const _RecentEventsSection({required this.events, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      key: const Key('team_recent_events'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Recent SessionEvents',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Text(
+                  '${events.length}',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (events.isEmpty)
+              const Text(
+                'No team session events yet.',
+                style: TextStyle(color: AppColors.textSecondary),
+              )
+            else
+              for (final item in events)
+                ListTile(
+                  key: Key('team_recent_event_${item.event.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.event_note),
+                  title: Text(item.event.taskName ?? 'Session Event'),
+                  subtitle: Text(
+                    [
+                      _formatEventDate(item.event.date),
+                      if (item.event.protocolName != null)
+                        item.event.protocolName!,
+                      '${item.participantCount} participants',
+                    ].join(' · '),
+                  ),
+                  trailing: IconButton(
+                    key: Key('team_open_event_${item.event.id}'),
+                    tooltip: 'Open event',
+                    icon: const Icon(Icons.open_in_new),
+                    onPressed: () => onOpen(item),
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -424,4 +507,17 @@ class _StatusChip extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatEventDate(String raw) {
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return raw;
+  final date =
+      '${parsed.year.toString().padLeft(4, '0')}-'
+      '${parsed.month.toString().padLeft(2, '0')}-'
+      '${parsed.day.toString().padLeft(2, '0')}';
+  final time =
+      '${parsed.hour.toString().padLeft(2, '0')}:'
+      '${parsed.minute.toString().padLeft(2, '0')}';
+  return '$date $time';
 }
