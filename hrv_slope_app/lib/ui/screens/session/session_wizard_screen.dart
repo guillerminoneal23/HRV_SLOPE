@@ -380,7 +380,7 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
       final recSourceStr = _hrvMode == HrvInputMode.rrIntervals
           ? RmssdRecoverySourceType.computedFromRr.value
           : _rmssdRecSource.value;
-      final exSourceStr = p.rmssdExerciseSource.name;
+      final exSourceStr = p.rmssdExerciseSource.storageValue;
       final rrPrep = p.recoveryRrPreprocessing;
       final rrQuality = _hrvMode == HrvInputMode.rrIntervals && rrPrep != null
           ? rrPrep.qualityDecision.name

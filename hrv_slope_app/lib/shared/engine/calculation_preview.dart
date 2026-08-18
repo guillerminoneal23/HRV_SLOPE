@@ -16,6 +16,16 @@ import 'package:hrv_slope_app/core/constants/hrv_sources.dart';
 /// Source of an RMSSD value.
 enum RmssdSource { measured, fallback4Ms, computedFromRr }
 
+extension RmssdSourceStorage on RmssdSource {
+  String get storageValue {
+    return switch (this) {
+      RmssdSource.measured => 'measured',
+      RmssdSource.fallback4Ms => 'fallback_4_ms',
+      RmssdSource.computedFromRr => 'computed_from_rr',
+    };
+  }
+}
+
 /// A tagged variable entry for display.
 class TaggedVariable {
   final String category;

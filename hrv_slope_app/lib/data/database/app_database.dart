@@ -1,7 +1,7 @@
 /// Main Drift database definition for the HRV Slope App.
 ///
-/// Includes all 8 tables and provides DAOs for data access.
-/// Phase 2.2: schema version 4 with RR preprocessing audit metadata.
+/// Includes all persistent tables and provides DAOs for data access.
+/// Schema version 5 adds team assignments and grouped session events.
 library;
 
 import 'dart:io';
@@ -14,14 +14,19 @@ import 'package:path/path.dart' as p;
 import 'package:hrv_slope_app/data/database/tables/tables.dart';
 import 'package:hrv_slope_app/data/database/daos/athletes_dao.dart';
 import 'package:hrv_slope_app/data/database/daos/sessions_dao.dart';
+import 'package:hrv_slope_app/data/database/daos/session_events_dao.dart';
 import 'package:hrv_slope_app/data/database/daos/settings_dao.dart';
+import 'package:hrv_slope_app/data/database/daos/teams_dao.dart';
 
 part 'app_database.g.dart';
 
 @DriftDatabase(
   tables: [
     Athletes,
+    Teams,
+    SessionEvents,
     Sessions,
+    AthleteTeamAssignments,
     MeasurementsHrv,
     IntensityVariables,
     NomogramModels,
@@ -29,7 +34,7 @@ part 'app_database.g.dart';
     ExclusionsOrNotes,
     AppSettings,
   ],
-  daos: [AthletesDao, SessionsDao, SettingsDao],
+  daos: [AthletesDao, SessionsDao, SessionEventsDao, SettingsDao, TeamsDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -38,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -129,7 +134,41 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(sessions, sessions.rrQualityNotesJson);
           await m.addColumn(sessions, sessions.rrRmssdDeltaPercent);
         }
+        if (from < 5) {
+          // Team and multi-session event infrastructure.
+          await m.createTable(teams);
+          await m.createTable(sessionEvents);
+          await m.createTable(athleteTeamAssignments);
+          await m.addColumn(sessions, sessions.eventId);
+          await _createV5Indexes();
+        }
       },
+      beforeOpen: (details) async {
+        await customStatement('PRAGMA foreign_keys = ON');
+      },
+    );
+  }
+
+  Future<void> _createV5Indexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_session_events_date '
+      'ON session_events (date)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_session_events_team_id_date '
+      'ON session_events (team_id, date)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_event_id '
+      'ON sessions (event_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_athlete_id_event_id '
+      'ON sessions (athlete_id, event_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_athlete_team_assignments_team_id '
+      'ON athlete_team_assignments (team_id)',
     );
   }
 }

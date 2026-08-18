@@ -146,7 +146,9 @@ class SessionEditService {
           classification: drift.Value(preview.classification),
           hrvInputMode: drift.Value(HrvInputMode.directRmssd.value),
           rmssdRecoverySource: drift.Value(input.rmssdRecoverySource.value),
-          rmssdExerciseSource: drift.Value(preview.rmssdExerciseSource.name),
+          rmssdExerciseSource: drift.Value(
+            preview.rmssdExerciseSource.storageValue,
+          ),
           rrQualityFlag: const drift.Value(null),
           rrArtifactPercent: const drift.Value(null),
           rrPreprocessingMode: const drift.Value(null),
