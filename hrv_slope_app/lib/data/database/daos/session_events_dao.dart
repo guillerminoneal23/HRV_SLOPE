@@ -174,31 +174,50 @@ class SessionEventsDao extends DatabaseAccessor<AppDatabase>
   Future<List<SessionEventListItem>> getRecentEventsForTeamWithCounts(
     int teamId, {
     int limit = 5,
+  }) {
+    return getEventsForTeamWithCounts(teamId, limit: limit);
+  }
+
+  Future<List<SessionEventListItem>> getEventsForTeamWithCounts(
+    int teamId, {
+    String? dateFrom,
+    String? dateTo,
+    int? limit,
   }) async {
-    final events =
-        await (select(sessionEvents)
-              ..where((e) => e.teamId.equals(teamId))
-              ..orderBy([(e) => OrderingTerm.desc(e.date)])
-              ..limit(limit))
-            .get();
+    final query = select(sessionEvents)..where((e) => e.teamId.equals(teamId));
+    if (dateFrom != null) {
+      query.where((e) => e.date.isBiggerOrEqualValue(dateFrom));
+    }
+    if (dateTo != null) {
+      query.where((e) => e.date.isSmallerOrEqualValue(dateTo));
+    }
+    query.orderBy([
+      (e) => OrderingTerm.desc(e.date),
+      (e) => OrderingTerm.desc(e.id),
+    ]);
+    if (limit != null) query.limit(limit);
+
+    final events = await query.get();
     if (events.isEmpty) return const [];
 
     final eventIds = events.map((event) => event.id).toList();
     final linkedSessions = await (select(
       sessions,
     )..where((s) => s.eventId.isIn(eventIds))).get();
-    final countsByEvent = <int, int>{};
+    final athleteIdsByEvent = <int, Set<int>>{};
     for (final session in linkedSessions) {
       final eventId = session.eventId;
       if (eventId == null) continue;
-      countsByEvent[eventId] = (countsByEvent[eventId] ?? 0) + 1;
+      athleteIdsByEvent
+          .putIfAbsent(eventId, () => <int>{})
+          .add(session.athleteId);
     }
 
     return [
       for (final event in events)
         SessionEventListItem(
           event: event,
-          participantCount: countsByEvent[event.id] ?? 0,
+          participantCount: athleteIdsByEvent[event.id]?.length ?? 0,
         ),
     ];
   }

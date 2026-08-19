@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/ui/screens/reports/group_report_screen.dart';
 import 'package:hrv_slope_app/ui/screens/reports/population_nomogram_screen.dart';
+import 'package:hrv_slope_app/ui/screens/reports/team_reports_hub_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key});
+  final AppDatabase? database;
+
+  const ReportsScreen({super.key, this.database});
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -15,16 +18,18 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   late final AppDatabase _db;
+  late final bool _ownsDatabase;
 
   @override
   void initState() {
     super.initState();
-    _db = AppDatabase();
+    _db = widget.database ?? AppDatabase();
+    _ownsDatabase = widget.database == null;
   }
 
   @override
   void dispose() {
-    _db.close();
+    if (_ownsDatabase) _db.close();
     super.dispose();
   }
 
@@ -37,10 +42,24 @@ class _ReportsScreenState extends State<ReportsScreen> {
         children: [
           _reportTile(
             context,
+            key: const Key('reports_team_reports'),
+            icon: Icons.groups_2,
+            title: 'Team Reports',
+            subtitle:
+                'Review recorded team SessionEvents and longitudinal RMSSD-Slope data.',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => TeamReportsHubScreen(database: _db),
+              ),
+            ),
+          ),
+          _reportTile(
+            context,
+            key: const Key('reports_group_report'),
             icon: Icons.groups,
             title: 'Group Report',
             subtitle:
-                'Rank matching sessions by RMSSD-Slope and compare recovery response.',
+                'Build a report from individually selected or filtered sessions.',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => GroupReportScreen(database: _db),
@@ -49,6 +68,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           _reportTile(
             context,
+            key: const Key('reports_study_nomogram'),
             icon: Icons.auto_graph,
             title: 'Study Nomogram',
             subtitle: 'View study reference bands and eligible session points.',
@@ -65,12 +85,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Widget _reportTile(
     BuildContext context, {
+    Key? key,
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
     return Card(
+      key: key,
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: Icon(icon, color: AppColors.primary),

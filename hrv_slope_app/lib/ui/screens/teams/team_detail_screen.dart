@@ -326,7 +326,7 @@ class _RecentEventsSection extends StatelessWidget {
                       _formatEventDate(item.event.date),
                       if (item.event.protocolName != null)
                         item.event.protocolName!,
-                      '${item.participantCount} participants',
+                      _participantCountLabel(item.participantCount),
                     ].join(' · '),
                   ),
                   trailing: IconButton(
@@ -542,4 +542,8 @@ String _formatEventDate(String raw) {
       '${parsed.hour.toString().padLeft(2, '0')}:'
       '${parsed.minute.toString().padLeft(2, '0')}';
   return '$date $time';
+}
+
+String _participantCountLabel(int count) {
+  return '$count ${count == 1 ? 'participant' : 'participants'}';
 }
