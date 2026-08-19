@@ -29,6 +29,24 @@ class SessionEventListItem {
   });
 }
 
+class TeamLongitudinalBundle {
+  final Team? team;
+  final List<SessionEvent> events;
+  final List<Session> sessions;
+  final List<Athlete> athletes;
+  final List<IntensityVariable> variables;
+  final List<ExclusionsOrNote> notes;
+
+  const TeamLongitudinalBundle({
+    required this.team,
+    required this.events,
+    required this.sessions,
+    required this.athletes,
+    required this.variables,
+    required this.notes,
+  });
+}
+
 @DriftAccessor(tables: [SessionEvents, Sessions])
 class SessionEventsDao extends DatabaseAccessor<AppDatabase>
     with _$SessionEventsDaoMixin {
@@ -183,6 +201,104 @@ class SessionEventsDao extends DatabaseAccessor<AppDatabase>
           participantCount: countsByEvent[event.id] ?? 0,
         ),
     ];
+  }
+
+  Future<TeamLongitudinalBundle> getTeamLongitudinalBundle({
+    required int teamId,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    final team = await (select(
+      db.teams,
+    )..where((t) => t.id.equals(teamId))).getSingleOrNull();
+
+    final eventsQuery = select(sessionEvents)
+      ..where((e) => e.teamId.equals(teamId));
+    if (dateFrom != null) {
+      eventsQuery.where((e) => e.date.isBiggerOrEqualValue(dateFrom));
+    }
+    if (dateTo != null) {
+      eventsQuery.where((e) => e.date.isSmallerOrEqualValue(dateTo));
+    }
+    eventsQuery.orderBy([
+      (e) => OrderingTerm.asc(e.date),
+      (e) => OrderingTerm.asc(e.id),
+    ]);
+
+    final teamEvents = await eventsQuery.get();
+    if (teamEvents.isEmpty) {
+      return TeamLongitudinalBundle(
+        team: team,
+        events: const [],
+        sessions: const [],
+        athletes: const [],
+        variables: const [],
+        notes: const [],
+      );
+    }
+
+    final eventIds = teamEvents.map((event) => event.id).toList();
+    final eventSessions =
+        await (select(sessions)
+              ..where((session) => session.eventId.isIn(eventIds))
+              ..orderBy([
+                (session) => OrderingTerm.asc(session.eventId),
+                (session) => OrderingTerm.asc(session.athleteId),
+                (session) => OrderingTerm.asc(session.id),
+              ]))
+            .get();
+    if (eventSessions.isEmpty) {
+      return TeamLongitudinalBundle(
+        team: team,
+        events: teamEvents,
+        sessions: const [],
+        athletes: const [],
+        variables: const [],
+        notes: const [],
+      );
+    }
+
+    final sessionIds = eventSessions.map((session) => session.id).toList();
+    final athleteIds = eventSessions
+        .map((session) => session.athleteId)
+        .toSet()
+        .toList();
+
+    final eventAthletes =
+        await (select(db.athletes)
+              ..where((athlete) => athlete.id.isIn(athleteIds))
+              ..orderBy([
+                (athlete) => OrderingTerm.asc(athlete.name),
+                (athlete) => OrderingTerm.asc(athlete.id),
+              ]))
+            .get();
+    final loadVariables =
+        await (select(db.intensityVariables)
+              ..where(
+                (variable) =>
+                    variable.sessionId.isIn(sessionIds) &
+                    variable.category.isIn(const ['internal', 'external']),
+              )
+              ..orderBy([
+                (variable) => OrderingTerm.asc(variable.sessionId),
+                (variable) => OrderingTerm.asc(variable.category),
+                (variable) => OrderingTerm.asc(variable.name),
+              ]))
+            .get();
+    final eventNotes =
+        await (select(db.exclusionsOrNotes)
+              ..where((note) => note.sessionId.isIn(sessionIds))
+              ..orderBy([(note) => OrderingTerm.asc(note.sessionId)]))
+            .get();
+
+    return TeamLongitudinalBundle(
+      team: team,
+      events: teamEvents,
+      sessions: eventSessions,
+      athletes: eventAthletes,
+      variables: loadVariables,
+      notes: eventNotes,
+    );
   }
 
   Future<List<SessionDetail>> getSessionDetailsForEvent(int eventId) async {

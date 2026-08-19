@@ -3,6 +3,7 @@ import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/data/database/daos/session_events_dao.dart';
 import 'package:hrv_slope_app/ui/screens/teams/session_event_detail_screen.dart';
 import 'package:hrv_slope_app/ui/screens/teams/team_form_dialog.dart';
+import 'package:hrv_slope_app/ui/screens/teams/team_longitudinal_heatmap_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 
 class TeamDetailScreen extends StatefulWidget {
@@ -158,6 +159,16 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: const Key('team_open_longitudinal_heatmap'),
+              onPressed: () => _openLongitudinalHeatmap(team.id),
+              icon: const Icon(Icons.grid_view),
+              label: const Text('Open longitudinal'),
+            ),
+          ),
+          const SizedBox(height: 16),
           _RecentEventsSection(events: _recentEvents, onOpen: _openEvent),
           const SizedBox(height: 16),
           Row(
@@ -251,6 +262,17 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
         builder: (_) => SessionEventDetailScreen(
           database: widget.database,
           eventId: item.event.id,
+        ),
+      ),
+    );
+  }
+
+  void _openLongitudinalHeatmap(int teamId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TeamLongitudinalHeatmapScreen(
+          database: widget.database,
+          teamId: teamId,
         ),
       ),
     );
