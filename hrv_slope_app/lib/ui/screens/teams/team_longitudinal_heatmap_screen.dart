@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/shared/engine/team_heatmap_builder.dart';
+import 'package:hrv_slope_app/shared/engine/team_heatmap_filter.dart';
 import 'package:hrv_slope_app/ui/screens/session/session_detail_screen.dart';
+import 'package:hrv_slope_app/ui/screens/teams/session_event_detail_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 import 'package:hrv_slope_app/ui/widgets/team_heatmap_grid.dart';
 
@@ -29,6 +31,12 @@ class _TeamLongitudinalHeatmapScreenState
   final TextEditingController _dateToCtrl = TextEditingController();
   final TextEditingController _searchCtrl = TextEditingController();
 
+  Set<String> _classificationFilters = {};
+  TeamHeatmapFallbackFilter _fallbackFilter = TeamHeatmapFallbackFilter.all;
+  TeamHeatmapSessionStateFilter _stateFilter =
+      TeamHeatmapSessionStateFilter.all;
+  String? _appliedDateFrom;
+  String? _appliedDateTo;
   TeamHeatmapData? _data;
   String? _error;
   bool _loading = true;
@@ -49,18 +57,26 @@ class _TeamLongitudinalHeatmapScreenState
   }
 
   Future<void> _load() async {
+    final draftDateFrom = _normalizedDateText(_dateFromCtrl.text);
+    final draftDateTo = _normalizedDateText(_dateToCtrl.text);
+    final dateError = _dateFilterError(draftDateFrom, draftDateTo);
+    if (dateError != null) {
+      if (!mounted) return;
+      setState(() {
+        _error = dateError;
+        _loading = false;
+      });
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
-      final dateFrom = _dateBoundary(_dateFromCtrl.text, endOfDay: false);
-      final dateTo = _dateBoundary(_dateToCtrl.text, endOfDay: true);
-      if (_hasInvalidDate(_dateFromCtrl.text) ||
-          _hasInvalidDate(_dateToCtrl.text)) {
-        throw const FormatException('Use YYYY-MM-DD for date filters.');
-      }
+      final dateFrom = _dateBoundary(draftDateFrom, endOfDay: false);
+      final dateTo = _dateBoundary(draftDateTo, endOfDay: true);
 
       final bundle = await widget.database.sessionEventsDao
           .getTeamLongitudinalBundle(
@@ -79,6 +95,8 @@ class _TeamLongitudinalHeatmapScreenState
       }
       setState(() {
         _data = buildTeamHeatmap(bundle);
+        _appliedDateFrom = draftDateFrom;
+        _appliedDateTo = draftDateTo;
         _loading = false;
       });
     } catch (error) {
@@ -105,19 +123,39 @@ class _TeamLongitudinalHeatmapScreenState
   }
 
   Widget _buildContent(TeamHeatmapData data) {
-    final rows = _filteredRows(data);
+    final filter = _currentFilter();
+    final filteredView = filterTeamHeatmap(data, filter);
+    final activeFilterCount = _activeFilterCount(filter);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Header(data: data, periodLabel: _periodLabel(data)),
+          _Header(
+            data: data,
+            filteredView: filteredView,
+            periodLabel: _periodLabel(data),
+          ),
           const SizedBox(height: 10),
+          if (_error != null) ...[
+            _InlineErrorBanner(message: _error!),
+            const SizedBox(height: 10),
+          ],
           _Filters(
             dateFromCtrl: _dateFromCtrl,
             dateToCtrl: _dateToCtrl,
             searchCtrl: _searchCtrl,
+            classificationOptions: teamHeatmapClassificationOptions,
+            selectedClassifications: _classificationFilters,
+            fallbackFilter: _fallbackFilter,
+            stateFilter: _stateFilter,
+            activeFilterCount: activeFilterCount,
             onApply: _load,
+            onClassificationChanged: _setClassificationFilter,
+            onFallbackChanged: (value) =>
+                setState(() => _fallbackFilter = value),
+            onStateChanged: (value) => setState(() => _stateFilter = value),
+            onReset: _resetFilters,
           ),
           const SizedBox(height: 10),
           const TeamHeatmapLegend(),
@@ -125,8 +163,9 @@ class _TeamLongitudinalHeatmapScreenState
           Expanded(
             child: TeamHeatmapGrid(
               data: data,
-              rows: rows,
+              view: filteredView,
               onCellSelected: _showCellDetail,
+              onEventSelected: _openEvent,
             ),
           ),
         ],
@@ -134,12 +173,42 @@ class _TeamLongitudinalHeatmapScreenState
     );
   }
 
-  List<TeamHeatmapRow> _filteredRows(TeamHeatmapData data) {
-    final query = _searchCtrl.text.trim().toLowerCase();
-    if (query.isEmpty) return data.rows;
-    return data.rows
-        .where((row) => row.athlete.name.toLowerCase().contains(query))
-        .toList();
+  TeamHeatmapFilter _currentFilter() {
+    return TeamHeatmapFilter(
+      athleteQuery: _searchCtrl.text,
+      classificationOptionIds: _classificationFilters,
+      fallbackFilter: _fallbackFilter,
+      stateFilter: _stateFilter,
+    );
+  }
+
+  int _activeFilterCount(TeamHeatmapFilter filter) {
+    var count = filter.activeFilterCount;
+    if (_appliedDateFrom != null) count++;
+    if (_appliedDateTo != null) count++;
+    return count;
+  }
+
+  void _setClassificationFilter(String id, bool selected) {
+    final next = Set<String>.from(_classificationFilters);
+    if (selected) {
+      next.add(id);
+    } else {
+      next.remove(id);
+    }
+    setState(() => _classificationFilters = next);
+  }
+
+  void _resetFilters() {
+    _dateFromCtrl.clear();
+    _dateToCtrl.clear();
+    _searchCtrl.clear();
+    setState(() {
+      _classificationFilters = {};
+      _fallbackFilter = TeamHeatmapFallbackFilter.all;
+      _stateFilter = TeamHeatmapSessionStateFilter.all;
+    });
+    _load();
   }
 
   void _showCellDetail(TeamHeatmapCellSelection selection) {
@@ -162,14 +231,29 @@ class _TeamLongitudinalHeatmapScreenState
     );
   }
 
+  void _openEvent(TeamHeatmapEvent event) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SessionEventDetailScreen(
+          database: widget.database,
+          eventId: event.id,
+        ),
+      ),
+    );
+  }
+
+  String? _dateFilterError(String? dateFrom, String? dateTo) {
+    if (_hasInvalidDate(dateFrom) || _hasInvalidDate(dateTo)) {
+      return 'Use YYYY-MM-DD for date filters.';
+    }
+    return null;
+  }
+
   String _periodLabel(TeamHeatmapData data) {
-    final explicitFrom = _dateFromCtrl.text.trim();
-    final explicitTo = _dateToCtrl.text.trim();
-    if (explicitFrom.isNotEmpty || explicitTo.isNotEmpty) {
-      return [
-        explicitFrom.isEmpty ? 'start' : explicitFrom,
-        explicitTo.isEmpty ? 'today' : explicitTo,
-      ].join(' to ');
+    final explicitFrom = _appliedDateFrom;
+    final explicitTo = _appliedDateTo;
+    if (explicitFrom != null || explicitTo != null) {
+      return [explicitFrom ?? 'start', explicitTo ?? 'today'].join(' to ');
     }
     if (data.events.isEmpty) return '-';
     return '${_formatDateOnly(data.events.first.date)} to '
@@ -177,11 +261,55 @@ class _TeamLongitudinalHeatmapScreenState
   }
 }
 
+String? _normalizedDateText(String raw) {
+  final trimmed = raw.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+class _InlineErrorBanner extends StatelessWidget {
+  final String message;
+
+  const _InlineErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('team_heatmap_inline_error'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.error.withValues(alpha: 0.08),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AppColors.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Header extends StatelessWidget {
   final TeamHeatmapData data;
+  final TeamHeatmapFilteredView filteredView;
   final String periodLabel;
 
-  const _Header({required this.data, required this.periodLabel});
+  const _Header({
+    required this.data,
+    required this.filteredView,
+    required this.periodLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -236,7 +364,9 @@ class _Header extends StatelessWidget {
                 _HeaderMetric(label: 'Events', value: '${summary.eventCount}'),
                 _HeaderMetric(
                   label: 'Athletes',
-                  value: '${summary.athleteCount}',
+                  value: filteredView.rows.length == summary.athleteCount
+                      ? '${summary.athleteCount}'
+                      : '${filteredView.rows.length}/${summary.athleteCount}',
                 ),
                 _HeaderMetric(
                   label: 'Fallback',
@@ -261,13 +391,31 @@ class _Filters extends StatelessWidget {
   final TextEditingController dateFromCtrl;
   final TextEditingController dateToCtrl;
   final TextEditingController searchCtrl;
+  final List<TeamHeatmapClassificationOption> classificationOptions;
+  final Set<String> selectedClassifications;
+  final TeamHeatmapFallbackFilter fallbackFilter;
+  final TeamHeatmapSessionStateFilter stateFilter;
+  final int activeFilterCount;
   final VoidCallback onApply;
+  final void Function(String id, bool selected) onClassificationChanged;
+  final ValueChanged<TeamHeatmapFallbackFilter> onFallbackChanged;
+  final ValueChanged<TeamHeatmapSessionStateFilter> onStateChanged;
+  final VoidCallback onReset;
 
   const _Filters({
     required this.dateFromCtrl,
     required this.dateToCtrl,
     required this.searchCtrl,
+    required this.classificationOptions,
+    required this.selectedClassifications,
+    required this.fallbackFilter,
+    required this.stateFilter,
+    required this.activeFilterCount,
     required this.onApply,
+    required this.onClassificationChanged,
+    required this.onFallbackChanged,
+    required this.onStateChanged,
+    required this.onReset,
   });
 
   @override
@@ -276,52 +424,168 @@ class _Filters extends StatelessWidget {
       key: const Key('team_heatmap_filters'),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 160,
-              child: TextField(
-                key: const Key('team_heatmap_date_from'),
-                controller: dateFromCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'From',
-                  hintText: 'YYYY-MM-DD',
-                  prefixIcon: Icon(Icons.date_range),
-                ),
-                onSubmitted: (_) => onApply(),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 160,
+                    child: TextField(
+                      key: const Key('team_heatmap_date_from'),
+                      controller: dateFromCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'From',
+                        hintText: 'YYYY-MM-DD',
+                        prefixIcon: Icon(Icons.date_range),
+                      ),
+                      onSubmitted: (_) => onApply(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 160,
+                    child: TextField(
+                      key: const Key('team_heatmap_date_to'),
+                      controller: dateToCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'To',
+                        hintText: 'YYYY-MM-DD',
+                        prefixIcon: Icon(Icons.event),
+                      ),
+                      onSubmitted: (_) => onApply(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    key: const Key('team_heatmap_apply_filters'),
+                    onPressed: onApply,
+                    icon: const Icon(Icons.filter_alt),
+                    label: const Text('Apply'),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    key: const Key('team_heatmap_reset_filters'),
+                    onPressed: onReset,
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('Reset filters'),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    _activeFilterLabel(activeFilterCount),
+                    key: const Key('team_heatmap_active_filter_count'),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: activeFilterCount == 0
+                          ? AppColors.textSecondary
+                          : AppColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
-            SizedBox(
-              width: 160,
-              child: TextField(
-                key: const Key('team_heatmap_date_to'),
-                controller: dateToCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'To',
-                  hintText: 'YYYY-MM-DD',
-                  prefixIcon: Icon(Icons.event),
-                ),
-                onSubmitted: (_) => onApply(),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 260,
+                    child: TextField(
+                      key: const Key('team_heatmap_search'),
+                      controller: searchCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Search athlete',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    key: const Key('team_heatmap_fallback_filter'),
+                    width: 188,
+                    child: DropdownButtonFormField<TeamHeatmapFallbackFilter>(
+                      key: ValueKey('fallback_${fallbackFilter.name}'),
+                      initialValue: fallbackFilter,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Fallback',
+                        prefixIcon: Icon(Icons.rule),
+                      ),
+                      items: [
+                        for (final value in TeamHeatmapFallbackFilter.values)
+                          DropdownMenuItem(
+                            value: value,
+                            child: Text(value.label),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) onFallbackChanged(value);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    key: const Key('team_heatmap_state_filter'),
+                    width: 170,
+                    child:
+                        DropdownButtonFormField<TeamHeatmapSessionStateFilter>(
+                          key: ValueKey('state_${stateFilter.name}'),
+                          initialValue: stateFilter,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'State',
+                            prefixIcon: Icon(Icons.check_circle_outline),
+                          ),
+                          items: [
+                            for (final value
+                                in TeamHeatmapSessionStateFilter.values)
+                              DropdownMenuItem(
+                                value: value,
+                                child: Text(value.label),
+                              ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) onStateChanged(value);
+                          },
+                        ),
+                  ),
+                ],
               ),
             ),
-            FilledButton.icon(
-              key: const Key('team_heatmap_apply_filters'),
-              onPressed: onApply,
-              icon: const Icon(Icons.filter_alt),
-              label: const Text('Apply'),
-            ),
-            SizedBox(
-              width: 260,
-              child: TextField(
-                key: const Key('team_heatmap_search'),
-                controller: searchCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Search athlete',
-                  prefixIcon: Icon(Icons.search),
-                ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Text(
+                    'Classification',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  for (final option in classificationOptions)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: FilterChip(
+                        key: Key(
+                          'team_heatmap_classification_filter_${option.id}',
+                        ),
+                        label: Text(option.label),
+                        selected: selectedClassifications.contains(option.id),
+                        onSelected: (selected) =>
+                            onClassificationChanged(option.id, selected),
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
@@ -329,6 +593,11 @@ class _Filters extends StatelessWidget {
       ),
     );
   }
+}
+
+String _activeFilterLabel(int count) {
+  if (count == 0) return 'No filters active';
+  return '$count ${count == 1 ? 'filter' : 'filters'} active';
 }
 
 class _CellDetailDialog extends StatelessWidget {
@@ -342,36 +611,31 @@ class _CellDetailDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final row = selection.row;
+    final filteredRow = selection.row;
+    final row = filteredRow.row;
+    final stats = filteredRow.stats;
     final event = selection.event.event;
     final cell = selection.cell;
     return AlertDialog(
       key: const Key('team_heatmap_cell_dialog'),
       title: Text(row.athlete.name),
       content: SizedBox(
-        width: 420,
+        width: 460,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _DetailLine(label: 'Event', value: _formatDate(event.date)),
+              const _DetailSectionTitle('Session'),
+              _DetailLine(label: 'Athlete', value: row.athlete.name),
+              _DetailLine(label: 'Date', value: _formatDate(event.date)),
               _DetailLine(label: 'Task', value: _blankToDash(event.taskName)),
               _DetailLine(
                 label: 'Protocol',
                 value: _blankToDash(event.protocolName),
               ),
               const Divider(height: 20),
-              _DetailLine(
-                label: 'RMSSD-Slope',
-                value: _formatNumber(cell.slope, digits: 3),
-              ),
-              _DetailLine(
-                label: 'Classification',
-                value: recoveryResponseShortLabelForClassificationKey(
-                  cell.classification,
-                ),
-              ),
+              const _DetailSectionTitle('RMSSD'),
               _DetailLine(
                 label: 'RMSSD exercise',
                 value: _formatRmssdExercise(cell),
@@ -380,40 +644,38 @@ class _CellDetailDialog extends StatelessWidget {
                 label: 'RMSSD recovery',
                 value: _formatMs(cell.rmssdRecovery),
               ),
-              _DetailLine(label: 'Load', value: _formatLoad(cell, event)),
+              _DetailLine(
+                label: 'RMSSD-Slope',
+                value: _formatNumber(cell.slope, digits: 3),
+              ),
+              _DetailLine(
+                label: 'Classification',
+                value: cell.state == TeamHeatmapCellState.valid
+                    ? recoveryResponseShortLabelForClassificationKey(
+                        cell.classification,
+                      )
+                    : '-',
+              ),
               const Divider(height: 20),
-              _DetailLine(
-                label: 'Visible sessions',
-                value: row.visibleSessionCount.toString(),
+              const _DetailSectionTitle('Status'),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final label in cell.statusLabels)
+                    _SmallChip(
+                      label: label,
+                      color:
+                          label == 'Incomplete' ||
+                              label == 'Unit mismatch' ||
+                              label == 'Exclusion'
+                          ? AppColors.warning
+                          : AppColors.tertiary,
+                    ),
+                  if (cell.statusLabels.isEmpty)
+                    const _SmallChip(label: 'OK', color: AppColors.success),
+                ],
               ),
-              _DetailLine(
-                label: 'Latest slope',
-                value: _formatNumber(row.lastSlope, digits: 3),
-              ),
-              _DetailLine(
-                label: 'Median in period',
-                value: _formatNumber(row.medianSlope, digits: 3),
-              ),
-              _DetailLine(
-                label: 'Fallback count',
-                value: row.fallbackCount.toString(),
-              ),
-              if (cell.statusLabels.isNotEmpty) ...[
-                const Divider(height: 20),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final label in cell.statusLabels)
-                      _SmallChip(
-                        label: label,
-                        color: label == 'Incomplete' || label == 'Unit mismatch'
-                            ? AppColors.warning
-                            : AppColors.tertiary,
-                      ),
-                  ],
-                ),
-              ],
               if (cell.warnings.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Text(
@@ -424,6 +686,44 @@ class _CellDetailDialog extends StatelessWidget {
                   ),
                 ),
               ],
+              const Divider(height: 20),
+              const _DetailSectionTitle('Load'),
+              _DetailLine(
+                label: 'Metric',
+                value: [
+                  event.loadType,
+                  event.loadMetricName,
+                  if (event.loadUnit != null && event.loadUnit!.isNotEmpty)
+                    event.loadUnit,
+                ].join(' '),
+              ),
+              _DetailLine(label: 'Value', value: _formatLoad(cell, event)),
+              const Divider(height: 20),
+              const _DetailSectionTitle('Individual period context'),
+              _DetailLine(
+                label: 'Sessions visible',
+                value: stats.visibleSessionCount.toString(),
+              ),
+              _DetailLine(
+                label: 'Valid sessions',
+                value: stats.validSessionCount.toString(),
+              ),
+              _DetailLine(
+                label: 'Latest valid slope',
+                value: _formatNumber(stats.latestValidSlope, digits: 3),
+              ),
+              _DetailLine(
+                label: 'Median valid slope',
+                value: _formatNumber(stats.medianValidSlope, digits: 3),
+              ),
+              _DetailLine(
+                label: 'Fallback count',
+                value: stats.fallbackCount.toString(),
+              ),
+              const Text(
+                'Statistics use the currently visible filtered period.',
+                style: TextStyle(color: AppColors.textHint, fontSize: 12),
+              ),
             ],
           ),
         ),
@@ -442,6 +742,26 @@ class _CellDetailDialog extends StatelessWidget {
           label: const Text('Open individual session'),
         ),
       ],
+    );
+  }
+}
+
+class _DetailSectionTitle extends StatelessWidget {
+  final String text;
+
+  const _DetailSectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: AppColors.primary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -550,10 +870,9 @@ class _SmallChip extends StatelessWidget {
   }
 }
 
-String? _dateBoundary(String raw, {required bool endOfDay}) {
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty) return null;
-  final parsed = DateTime.tryParse(trimmed);
+String? _dateBoundary(String? raw, {required bool endOfDay}) {
+  if (raw == null) return null;
+  final parsed = _parseStrictDate(raw);
   if (parsed == null) return null;
   final bounded = endOfDay
       ? DateTime(parsed.year, parsed.month, parsed.day, 23, 59, 59, 999)
@@ -561,9 +880,21 @@ String? _dateBoundary(String raw, {required bool endOfDay}) {
   return bounded.toIso8601String();
 }
 
-bool _hasInvalidDate(String raw) {
-  final trimmed = raw.trim();
-  return trimmed.isNotEmpty && DateTime.tryParse(trimmed) == null;
+bool _hasInvalidDate(String? raw) {
+  return raw != null && _parseStrictDate(raw) == null;
+}
+
+DateTime? _parseStrictDate(String raw) {
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(raw.trim());
+  if (match == null) return null;
+  final year = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  final parsed = DateTime(year, month, day);
+  if (parsed.year != year || parsed.month != month || parsed.day != day) {
+    return null;
+  }
+  return parsed;
 }
 
 String _formatDateOnly(String raw) {

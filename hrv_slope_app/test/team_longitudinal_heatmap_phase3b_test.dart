@@ -365,10 +365,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.drag(
-        find.byKey(const Key('team_heatmap_horizontal_scroll')),
-        const Offset(-500, 0),
-      );
+      await tester.dragFrom(const Offset(700, 540), const Offset(-500, 0));
       await tester.pumpAndSettle();
     });
 
@@ -387,7 +384,15 @@ void main() {
   });
 }
 
-Future<void> _pump(WidgetTester tester, Widget child) async {
+Future<void> _pump(
+  WidgetTester tester,
+  Widget child, {
+  Size size = const Size(1280, 720),
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(MaterialApp(theme: buildAppTheme(), home: child));
   await tester.pumpAndSettle();
 }

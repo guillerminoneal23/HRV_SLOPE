@@ -1,32 +1,43 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/shared/engine/team_heatmap_builder.dart';
+import 'package:hrv_slope_app/shared/engine/team_heatmap_filter.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 
+const double _athleteColumnWidth = 220;
+const double _cellWidth = 88;
+const double _headerHeight = 58;
+const double _rowHeight = 46;
+
 class TeamHeatmapCellSelection {
-  final TeamHeatmapRow row;
+  final TeamHeatmapFilteredRow row;
   final TeamHeatmapEvent event;
-  final TeamHeatmapCell cell;
+  final TeamHeatmapFilteredCell filteredCell;
 
   const TeamHeatmapCellSelection({
     required this.row,
     required this.event,
-    required this.cell,
+    required this.filteredCell,
   });
+
+  TeamHeatmapCell get cell => filteredCell.cell;
 }
 
 class TeamHeatmapGrid extends StatefulWidget {
   final TeamHeatmapData data;
-  final List<TeamHeatmapRow> rows;
+  final TeamHeatmapFilteredView view;
   final ValueChanged<TeamHeatmapCellSelection> onCellSelected;
+  final ValueChanged<TeamHeatmapEvent> onEventSelected;
 
   const TeamHeatmapGrid({
     super.key,
     required this.data,
-    required this.rows,
+    required this.view,
     required this.onCellSelected,
+    required this.onEventSelected,
   });
 
   @override
@@ -46,13 +57,26 @@ class _TeamHeatmapGridState extends State<TeamHeatmapGrid> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.data.events.isEmpty || widget.rows.isEmpty) {
+    if (widget.data.events.isEmpty || widget.data.rows.isEmpty) {
       return const Card(
         key: Key('team_heatmap_empty'),
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
             'No team session events with participants in this period.',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    if (widget.view.rows.isEmpty) {
+      return const Card(
+        key: Key('team_heatmap_filtered_empty'),
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'No athletes match current filters.',
             style: TextStyle(color: AppColors.textSecondary),
           ),
         ),
@@ -75,8 +99,8 @@ class _TeamHeatmapGridState extends State<TeamHeatmapGrid> {
                   ),
                 ),
                 Text(
-                  '${widget.rows.length} athletes x '
-                  '${widget.data.events.length} events',
+                  '${widget.view.rows.length} athletes x '
+                  '${widget.view.events.length} events',
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 12,
@@ -86,56 +110,98 @@ class _TeamHeatmapGridState extends State<TeamHeatmapGrid> {
             ),
             const SizedBox(height: 10),
             Expanded(
-              child: Scrollbar(
-                controller: _horizontalController,
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  key: const Key('team_heatmap_horizontal_scroll'),
-                  controller: _horizontalController,
-                  scrollDirection: Axis.horizontal,
-                  child: Scrollbar(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final contentHeight =
+                      _headerHeight + widget.view.rows.length * _rowHeight;
+                  final matrixViewportWidth =
+                      constraints.maxWidth > _athleteColumnWidth
+                      ? constraints.maxWidth - _athleteColumnWidth
+                      : 0.0;
+
+                  return Scrollbar(
                     controller: _verticalController,
                     thumbVisibility: true,
                     child: SingleChildScrollView(
                       key: const Key('team_heatmap_vertical_scroll'),
                       controller: _verticalController,
-                      child: Table(
-                        defaultColumnWidth: const FixedColumnWidth(88),
-                        columnWidths: const {0: FixedColumnWidth(220)},
-                        border: TableBorder.all(
-                          color: AppColors.cardBorder,
-                          width: 0.5,
-                        ),
-                        children: [
-                          TableRow(
-                            children: [
-                              const _CornerHeader(),
-                              for (final event in widget.data.events)
-                                _EventHeaderCell(event: event),
-                            ],
-                          ),
-                          for (final row in widget.rows)
-                            TableRow(
-                              children: [
-                                _AthleteHeaderCell(row: row),
-                                for (
-                                  var index = 0;
-                                  index < widget.data.events.length;
-                                  index++
-                                )
-                                  _HeatmapCellWidget(
-                                    row: row,
-                                    event: widget.data.events[index],
-                                    cell: row.cells[index],
-                                    onSelected: widget.onCellSelected,
-                                  ),
-                              ],
+                      child: SizedBox(
+                        height: contentHeight,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              key: const Key(
+                                'team_heatmap_fixed_athlete_column',
+                              ),
+                              width: _athleteColumnWidth,
+                              height: contentHeight,
+                              child: Column(
+                                children: [
+                                  const _CornerHeader(),
+                                  for (final row in widget.view.rows)
+                                    _AthleteHeaderCell(row: row.row),
+                                ],
+                              ),
                             ),
-                        ],
+                            SizedBox(
+                              width: matrixViewportWidth,
+                              height: contentHeight,
+                              child: Scrollbar(
+                                controller: _horizontalController,
+                                thumbVisibility: true,
+                                child: SingleChildScrollView(
+                                  key: const Key(
+                                    'team_heatmap_horizontal_scroll',
+                                  ),
+                                  controller: _horizontalController,
+                                  scrollDirection: Axis.horizontal,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          for (final event
+                                              in widget.view.events)
+                                            _EventHeaderCell(
+                                              event: event,
+                                              onOpen: () =>
+                                                  widget.onEventSelected(event),
+                                            ),
+                                        ],
+                                      ),
+                                      for (final row in widget.view.rows)
+                                        Row(
+                                          children: [
+                                            for (
+                                              var index = 0;
+                                              index < widget.view.events.length;
+                                              index++
+                                            )
+                                              _HeatmapCellWidget(
+                                                row: row,
+                                                event:
+                                                    widget.view.events[index],
+                                                filteredCell: row.cells[index],
+                                                filtersActive:
+                                                    widget.view.hasCellFilters,
+                                                onSelected:
+                                                    widget.onCellSelected,
+                                              ),
+                                          ],
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ],
@@ -154,43 +220,40 @@ class TeamHeatmapLegend extends StatelessWidget {
       key: const Key('team_heatmap_legend'),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Color represents the interpretation stored for each session '
-              'according to its active reference.',
-              style: TextStyle(color: AppColors.textHint, fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 10,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: const [
-                _LegendSwatch(
-                  color: AppColors.classVeryHigh,
-                  label: 'Very high',
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: const [
+              SizedBox(
+                width: 360,
+                child: Text(
+                  'Color represents the interpretation stored for each '
+                  'session according to its active reference.',
+                  style: TextStyle(color: AppColors.textHint, fontSize: 12),
                 ),
-                _LegendSwatch(
-                  color: AppColors.classHighMod,
-                  label: 'High/moderate',
-                ),
-                _LegendSwatch(
-                  color: AppColors.classExpected,
-                  label: 'Expected',
-                ),
-                _LegendSwatch(
-                  color: AppColors.classLowFast,
-                  label: 'Favorable',
-                ),
-                _LegendToken(label: 'F', description: 'Fallback 4 ms'),
-                _LegendToken(label: '!', description: 'Incomplete'),
-                _LegendToken(label: '-', description: 'Missing'),
-                _LegendToken(label: '2x', description: 'Duplicate'),
-              ],
-            ),
-          ],
+              ),
+              SizedBox(width: 12),
+              _LegendSwatch(color: AppColors.classVeryHigh, label: 'Very high'),
+              SizedBox(width: 10),
+              _LegendSwatch(
+                color: AppColors.classHighMod,
+                label: 'High/moderate',
+              ),
+              SizedBox(width: 10),
+              _LegendSwatch(color: AppColors.classExpected, label: 'Expected'),
+              SizedBox(width: 10),
+              _LegendSwatch(color: AppColors.classLowFast, label: 'Favorable'),
+              SizedBox(width: 10),
+              _LegendToken(label: 'F', description: 'Fallback 4 ms'),
+              SizedBox(width: 10),
+              _LegendToken(label: '!', description: 'Incomplete'),
+              SizedBox(width: 10),
+              _LegendToken(label: '-', description: 'No participation'),
+              SizedBox(width: 10),
+              _LegendToken(label: '2x', description: 'Duplicate'),
+            ],
+          ),
         ),
       ),
     );
@@ -202,14 +265,17 @@ class _CornerHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 58,
-      child: Padding(
-        padding: EdgeInsets.all(8),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Athlete', style: TextStyle(fontWeight: FontWeight.w700)),
-        ),
+    return Container(
+      height: _headerHeight,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        border: Border.all(color: AppColors.cardBorder, width: 0.5),
+      ),
+      padding: const EdgeInsets.all(8),
+      alignment: Alignment.centerLeft,
+      child: const Text(
+        'Athlete',
+        style: TextStyle(fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -217,8 +283,9 @@ class _CornerHeader extends StatelessWidget {
 
 class _EventHeaderCell extends StatelessWidget {
   final TeamHeatmapEvent event;
+  final VoidCallback onOpen;
 
-  const _EventHeaderCell({required this.event});
+  const _EventHeaderCell({required this.event, required this.onOpen});
 
   @override
   Widget build(BuildContext context) {
@@ -228,29 +295,48 @@ class _EventHeaderCell extends StatelessWidget {
         _formatDate(raw.date),
         if (raw.taskName != null) 'Task: ${raw.taskName}',
         if (raw.protocolName != null) 'Protocol: ${raw.protocolName}',
+        'Load: ${_loadDefinition(raw)}',
+        'Open SessionEvent',
       ].join('\n'),
-      child: Container(
-        key: Key('team_heatmap_event_header_${event.id}'),
-        height: 58,
-        padding: const EdgeInsets.all(6),
-        color: AppColors.surfaceContainerHigh,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _formatShortDate(raw.date),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+      child: Semantics(
+        button: true,
+        label: 'Open SessionEvent ${_blankToDash(raw.taskName)}',
+        child: InkWell(
+          key: Key('team_heatmap_event_header_${event.id}'),
+          onTap: onOpen,
+          child: Container(
+            width: _cellWidth,
+            height: _headerHeight,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerHigh,
+              border: Border.all(color: AppColors.cardBorder, width: 0.5),
             ),
-            const SizedBox(height: 3),
-            Text(
-              _blankToDash(raw.taskName),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _formatShortDate(raw.date),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _blankToDash(raw.taskName),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -266,9 +352,14 @@ class _AthleteHeaderCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: Key('team_heatmap_row_${row.athlete.id}'),
-      height: 46,
+      width: _athleteColumnWidth,
+      height: _rowHeight,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainer,
+        border: Border.all(color: AppColors.cardBorder, width: 0.5),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -291,81 +382,107 @@ class _AthleteHeaderCell extends StatelessWidget {
 }
 
 class _HeatmapCellWidget extends StatelessWidget {
-  final TeamHeatmapRow row;
+  final TeamHeatmapFilteredRow row;
   final TeamHeatmapEvent event;
-  final TeamHeatmapCell cell;
+  final TeamHeatmapFilteredCell filteredCell;
+  final bool filtersActive;
   final ValueChanged<TeamHeatmapCellSelection> onSelected;
 
   const _HeatmapCellWidget({
     required this.row,
     required this.event,
-    required this.cell,
+    required this.filteredCell,
+    required this.filtersActive,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cell = filteredCell.cell;
+    final filteredOut = filtersActive && !filteredCell.matches;
     final canSelect =
-        cell.state == TeamHeatmapCellState.valid ||
-        cell.state == TeamHeatmapCellState.incomplete;
-    final content = Stack(
-      children: [
-        Container(
-          height: 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _cellBackground(cell),
-            border: Border.all(color: _cellBorder(cell), width: 1),
-          ),
-          child: Text(
-            _cellLabel(cell),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _cellTextColor(cell),
+        !filteredOut &&
+        (cell.state == TeamHeatmapCellState.valid ||
+            cell.state == TeamHeatmapCellState.incomplete);
+    final content = Opacity(
+      opacity: filteredOut ? 0.24 : 1,
+      child: Stack(
+        children: [
+          Container(
+            width: _cellWidth,
+            height: _rowHeight,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _cellBackground(cell),
+              border: Border.all(color: _cellBorder(cell), width: 1),
+            ),
+            child: Text(
+              _cellLabel(cell),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _cellTextColor(cell),
+              ),
             ),
           ),
-        ),
-        if (cell.hasFallbackExercise)
-          Positioned(
-            right: 3,
-            top: 3,
-            child: Container(
-              key: Key(
-                'team_heatmap_fallback_${cell.athleteId}_${cell.eventId}',
-              ),
-              width: 14,
-              height: 14,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.tertiary,
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: const Text(
-                'F',
-                style: TextStyle(
-                  color: AppColors.surfaceDark,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
+          if (cell.hasFallbackExercise)
+            Positioned(
+              right: 3,
+              top: 3,
+              child: Tooltip(
+                message: 'Exercise RMSSD used default 4 ms fallback',
+                child: Container(
+                  key: Key(
+                    'team_heatmap_fallback_${cell.athleteId}_${cell.eventId}',
+                  ),
+                  width: 14,
+                  height: 14,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.tertiary,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: const Text(
+                    'F',
+                    style: TextStyle(
+                      color: AppColors.surfaceDark,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
 
     return Tooltip(
-      message: _cellTooltip(row: row, event: event, cell: cell),
+      message: _cellTooltip(
+        row: row.row,
+        event: event,
+        cell: cell,
+        filteredOut: filteredOut,
+      ),
       child: Semantics(
-        label: _cellTooltip(row: row, event: event, cell: cell),
+        label: _cellTooltip(
+          row: row.row,
+          event: event,
+          cell: cell,
+          filteredOut: filteredOut,
+        ),
         button: canSelect,
         child: InkWell(
           key: Key('team_heatmap_cell_${cell.athleteId}_${cell.eventId}'),
           onTap: canSelect
               ? () => onSelected(
-                  TeamHeatmapCellSelection(row: row, event: event, cell: cell),
+                  TeamHeatmapCellSelection(
+                    row: row,
+                    event: event,
+                    filteredCell: filteredCell,
+                  ),
                 )
               : null,
           child: content,
@@ -498,6 +615,7 @@ String _cellTooltip({
   required TeamHeatmapRow row,
   required TeamHeatmapEvent event,
   required TeamHeatmapCell cell,
+  required bool filteredOut,
 }) {
   final base = [
     row.athlete.name,
@@ -505,19 +623,27 @@ String _cellTooltip({
     if (event.event.taskName != null) event.event.taskName!,
   ].join(' - ');
 
+  final filteredLabel = filteredOut ? ['Filtered out by current filters'] : [];
   switch (cell.state) {
     case TeamHeatmapCellState.missing:
-      return '$base\nNo participation';
+      return [...filteredLabel, base, 'No participation'].join('\n');
     case TeamHeatmapCellState.duplicate:
-      return '$base\nDuplicate sessions: ${cell.duplicateSessionIds.join(', ')}';
+      return [
+        ...filteredLabel,
+        base,
+        'Duplicate sessions detected',
+        'Session IDs: ${cell.duplicateSessionIds.join(', ')}',
+      ].join('\n');
     case TeamHeatmapCellState.incomplete:
     case TeamHeatmapCellState.valid:
       return [
+        ...filteredLabel,
         base,
         'RMSSD-Slope: ${_formatNumber(cell.slope, digits: 3)}',
         'Classification: '
-            '${recoveryResponseShortLabelForClassificationKey(cell.classification)}',
-        if (cell.hasFallbackExercise) 'RMSSD exercise: fallback 4 ms',
+            '${cell.state == TeamHeatmapCellState.valid ? recoveryResponseShortLabelForClassificationKey(cell.classification) : '-'}',
+        if (cell.hasFallbackExercise)
+          'Exercise RMSSD used default 4 ms fallback',
         if (cell.statusLabels.isNotEmpty)
           'Status: ${cell.statusLabels.join(', ')}',
       ].join('\n');
@@ -547,6 +673,14 @@ Color _classificationColor(String? value) {
     default:
       return AppColors.tertiary;
   }
+}
+
+String _loadDefinition(SessionEvent event) {
+  return [
+    event.loadType,
+    event.loadMetricName,
+    if (_hasText(event.loadUnit)) event.loadUnit,
+  ].join(' ');
 }
 
 String _formatShortDate(String raw) {
@@ -579,3 +713,5 @@ String _blankToDash(String? value) {
   if (trimmed == null || trimmed.isEmpty) return '-';
   return trimmed;
 }
+
+bool _hasText(String? value) => value != null && value.trim().isNotEmpty;
