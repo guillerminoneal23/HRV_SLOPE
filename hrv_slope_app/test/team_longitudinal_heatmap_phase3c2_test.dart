@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/shared/engine/team_heatmap_builder.dart';
 import 'package:hrv_slope_app/shared/engine/team_heatmap_filter.dart';
+import 'package:hrv_slope_app/ui/screens/reports/team_session_events_screen.dart';
 import 'package:hrv_slope_app/ui/screens/teams/session_event_detail_screen.dart';
 import 'package:hrv_slope_app/ui/screens/teams/team_longitudinal_heatmap_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
@@ -583,6 +584,102 @@ void main() {
       expect(find.text('Expected measured'), findsWidgets);
     });
 
+    testWidgets(
+      'shows same-day event times in headers and keeps cells separate',
+      (tester) async {
+        final seed = await _seedSameDayEvents(db);
+        final data = await _loadData(db, seed.teamId);
+
+        expect(data.events.map((event) => event.id), [
+          seed.morningEventId,
+          seed.afternoonEventId,
+        ]);
+        for (final athleteName in ['Alpha', 'Bravo']) {
+          final row = _heatmapRow(data, athleteName);
+          final morningCell = _heatmapCell(row, seed.morningEventId);
+          final afternoonCell = _heatmapCell(row, seed.afternoonEventId);
+          expect(morningCell.state, TeamHeatmapCellState.valid);
+          expect(afternoonCell.state, TeamHeatmapCellState.valid);
+          expect(morningCell.state, isNot(TeamHeatmapCellState.duplicate));
+          expect(afternoonCell.state, isNot(TeamHeatmapCellState.duplicate));
+        }
+
+        await _pump(
+          tester,
+          TeamLongitudinalHeatmapScreen(database: db, teamId: seed.teamId),
+        );
+
+        final morningHeader = find.byKey(
+          Key('team_heatmap_event_header_${seed.morningEventId}'),
+        );
+        final afternoonHeader = find.byKey(
+          Key('team_heatmap_event_header_${seed.afternoonEventId}'),
+        );
+        expect(morningHeader, findsOneWidget);
+        expect(afternoonHeader, findsOneWidget);
+        expect(find.text('10:00'), findsOneWidget);
+        expect(find.text('17:00'), findsOneWidget);
+        expect(
+          tester.getTopLeft(morningHeader).dx,
+          lessThan(tester.getTopLeft(afternoonHeader).dx),
+        );
+
+        await tester.enterText(
+          find.byKey(const Key('team_heatmap_date_from')),
+          '2026-08-20',
+        );
+        await tester.enterText(
+          find.byKey(const Key('team_heatmap_date_to')),
+          '2026-08-20',
+        );
+        await tester.tap(find.byKey(const Key('team_heatmap_apply_filters')));
+        await tester.pumpAndSettle();
+
+        expect(morningHeader, findsOneWidget);
+        expect(afternoonHeader, findsOneWidget);
+        expect(find.text('10:00'), findsOneWidget);
+        expect(find.text('17:00'), findsOneWidget);
+      },
+    );
+
+    testWidgets('does not invent midnight for date-only event headers', (
+      tester,
+    ) async {
+      final seed = await _seedDateOnlyEvent(db);
+
+      await _pump(
+        tester,
+        TeamLongitudinalHeatmapScreen(database: db, teamId: seed.teamId),
+      );
+
+      expect(
+        find.byKey(Key('team_heatmap_event_header_${seed.eventId}')),
+        findsOneWidget,
+      );
+      expect(find.text('08/21'), findsOneWidget);
+      expect(find.text('00:00'), findsNothing);
+    });
+
+    testWidgets('Team Sessions lists same-day events newest first with time', (
+      tester,
+    ) async {
+      final seed = await _seedSameDayEvents(db);
+
+      await _pump(
+        tester,
+        TeamSessionEventsScreen(database: db, teamId: seed.teamId),
+      );
+
+      final afternoon = find.textContaining('2026-08-20 17:00');
+      final morning = find.textContaining('2026-08-20 10:00');
+      expect(afternoon, findsOneWidget);
+      expect(morning, findsOneWidget);
+      expect(
+        tester.getTopLeft(afternoon).dy,
+        lessThan(tester.getTopLeft(morning).dy),
+      );
+    });
+
     testWidgets('opens valid and incomplete cell context but not missing or duplicate', (
       tester,
     ) async {
@@ -742,6 +839,14 @@ TeamHeatmapFilteredCell _filteredCell(TeamHeatmapFilteredRow row, int eventId) {
   return row.cells.singleWhere((cell) => cell.cell.eventId == eventId);
 }
 
+TeamHeatmapRow _heatmapRow(TeamHeatmapData data, String name) {
+  return data.rows.singleWhere((row) => row.athlete.name == name);
+}
+
+TeamHeatmapCell _heatmapCell(TeamHeatmapRow row, int eventId) {
+  return row.cells.singleWhere((cell) => cell.eventId == eventId);
+}
+
 Future<_Seed3c2> _seed3c2Heatmap(AppDatabase db) async {
   final teamId = await db.teamsDao.createTeam(name: '3C2 Team');
   final alpha = await _insertAthlete(db, name: 'Alpha');
@@ -887,6 +992,120 @@ Future<_Seed3c2> _seed3c2Heatmap(AppDatabase db) async {
       'measured4': measured4,
     },
   );
+}
+
+Future<_SameDaySeed> _seedSameDayEvents(AppDatabase db) async {
+  final teamId = await db.teamsDao.createTeam(name: 'Same Day FC');
+  final alpha = await _insertAthlete(db, name: 'Alpha');
+  final bravo = await _insertAthlete(db, name: 'Bravo');
+  await db.teamsDao.assignAthleteToTeam(athleteId: alpha, teamId: teamId);
+  await db.teamsDao.assignAthleteToTeam(athleteId: bravo, teamId: teamId);
+
+  final morning = await _insertEvent(
+    db,
+    teamId: teamId,
+    date: '2026-08-20T10:00:00',
+    taskName: 'Training',
+  );
+  final afternoon = await _insertEvent(
+    db,
+    teamId: teamId,
+    date: '2026-08-20T17:00:00',
+    taskName: 'Training',
+  );
+
+  await _insertSession(
+    db,
+    athleteId: alpha,
+    eventId: morning,
+    date: '2026-08-20T10:00:00',
+    taskName: 'Training',
+    loadValue: 80,
+    rmssdExercise: 5,
+    rmssdExerciseIsDefault: false,
+    rmssdExerciseSource: 'measured',
+    rmssdRecovery: 20,
+    slope: 0.20,
+    classification: 'expected_response',
+  );
+  await _insertSession(
+    db,
+    athleteId: bravo,
+    eventId: morning,
+    date: '2026-08-20T10:00:00',
+    taskName: 'Training',
+    loadValue: 82,
+    rmssdExercise: 6,
+    rmssdExerciseIsDefault: false,
+    rmssdExerciseSource: 'measured',
+    rmssdRecovery: 21,
+    slope: 0.25,
+    classification: 'expected_response',
+  );
+  await _insertSession(
+    db,
+    athleteId: alpha,
+    eventId: afternoon,
+    date: '2026-08-20T17:00:00',
+    taskName: 'Training',
+    loadValue: 84,
+    rmssdExercise: 7,
+    rmssdExerciseIsDefault: false,
+    rmssdExerciseSource: 'measured',
+    rmssdRecovery: 22,
+    slope: 0.30,
+    classification: 'expected_response',
+  );
+  await _insertSession(
+    db,
+    athleteId: bravo,
+    eventId: afternoon,
+    date: '2026-08-20T17:00:00',
+    taskName: 'Training',
+    loadValue: 86,
+    rmssdExercise: 8,
+    rmssdExerciseIsDefault: false,
+    rmssdExerciseSource: 'measured',
+    rmssdRecovery: 23,
+    slope: 0.35,
+    classification: 'expected_response',
+  );
+
+  return _SameDaySeed(
+    teamId: teamId,
+    athleteIds: {'alpha': alpha, 'bravo': bravo},
+    morningEventId: morning,
+    afternoonEventId: afternoon,
+  );
+}
+
+Future<_DateOnlySeed> _seedDateOnlyEvent(AppDatabase db) async {
+  final teamId = await db.teamsDao.createTeam(name: 'Historic Date Only FC');
+  final alpha = await _insertAthlete(db, name: 'Alpha');
+  await db.teamsDao.assignAthleteToTeam(athleteId: alpha, teamId: teamId);
+
+  final eventId = await _insertEvent(
+    db,
+    teamId: teamId,
+    date: '2026-08-21',
+    taskName: 'Training',
+  );
+  await _insertSession(
+    db,
+    athleteId: alpha,
+    eventId: eventId,
+    date: '2026-08-21',
+    taskName: 'Training',
+    loadValue: 80,
+    rmssdExercise: 5,
+    rmssdExerciseIsDefault: false,
+    rmssdExerciseSource: 'measured',
+    rmssdRecovery: 20,
+    slope: 0.20,
+    classification: 'expected_response',
+  );
+
+  return _DateOnlySeed(teamId: teamId, eventId: eventId);
 }
 
 Future<_LargeSeed> _seedLargeHeatmap(
@@ -1054,6 +1273,27 @@ class _Seed3c2 {
     required this.athleteIds,
     required this.eventIds,
   });
+}
+
+class _SameDaySeed {
+  final int teamId;
+  final Map<String, int> athleteIds;
+  final int morningEventId;
+  final int afternoonEventId;
+
+  const _SameDaySeed({
+    required this.teamId,
+    required this.athleteIds,
+    required this.morningEventId,
+    required this.afternoonEventId,
+  });
+}
+
+class _DateOnlySeed {
+  final int teamId;
+  final int eventId;
+
+  const _DateOnlySeed({required this.teamId, required this.eventId});
 }
 
 class _LargeSeed {

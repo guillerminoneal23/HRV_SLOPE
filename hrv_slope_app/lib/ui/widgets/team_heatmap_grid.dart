@@ -9,7 +9,7 @@ import 'package:hrv_slope_app/ui/theme/app_theme.dart';
 
 const double _athleteColumnWidth = 220;
 const double _cellWidth = 88;
-const double _headerHeight = 58;
+const double _headerHeight = 68;
 const double _rowHeight = 46;
 
 class TeamHeatmapCellSelection {
@@ -290,9 +290,12 @@ class _EventHeaderCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final raw = event.event;
+    final dateLabel = _formatShortDate(raw.date);
+    final timeLabel = _formatTimeIfExplicit(raw.date);
+    final fullDateLabel = _formatDate(raw.date);
     return Tooltip(
       message: [
-        _formatDate(raw.date),
+        fullDateLabel,
         if (raw.taskName != null) 'Task: ${raw.taskName}',
         if (raw.protocolName != null) 'Protocol: ${raw.protocolName}',
         'Load: ${_loadDefinition(raw)}',
@@ -300,7 +303,8 @@ class _EventHeaderCell extends StatelessWidget {
       ].join('\n'),
       child: Semantics(
         button: true,
-        label: 'Open SessionEvent ${_blankToDash(raw.taskName)}',
+        label:
+            'Open SessionEvent ${_blankToDash(raw.taskName)}, $fullDateLabel',
         child: InkWell(
           key: Key('team_heatmap_event_header_${event.id}'),
           onTap: onOpen,
@@ -316,7 +320,7 @@ class _EventHeaderCell extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  _formatShortDate(raw.date),
+                  dateLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -324,7 +328,21 @@ class _EventHeaderCell extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 3),
+                if (timeLabel != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    timeLabel,
+                    key: Key('team_heatmap_event_time_${event.id}'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 2),
                 Text(
                   _blankToDash(raw.taskName),
                   maxLines: 1,
@@ -697,10 +715,8 @@ String _formatDate(String raw) {
       '${parsed.year.toString().padLeft(4, '0')}-'
       '${parsed.month.toString().padLeft(2, '0')}-'
       '${parsed.day.toString().padLeft(2, '0')}';
-  final time =
-      '${parsed.hour.toString().padLeft(2, '0')}:'
-      '${parsed.minute.toString().padLeft(2, '0')}';
-  return '$date $time';
+  final time = _formatTimeIfExplicit(raw);
+  return time == null ? date : '$date $time';
 }
 
 String _formatNumber(double? value, {int digits = 1}) {
@@ -715,3 +731,16 @@ String _blankToDash(String? value) {
 }
 
 bool _hasText(String? value) => value != null && value.trim().isNotEmpty;
+
+String? _formatTimeIfExplicit(String raw) {
+  if (!_hasExplicitTime(raw)) return null;
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return null;
+  return '${parsed.hour.toString().padLeft(2, '0')}:'
+      '${parsed.minute.toString().padLeft(2, '0')}';
+}
+
+bool _hasExplicitTime(String raw) {
+  final trimmed = raw.trim();
+  return RegExp(r'(?:T|\s)\d{2}:\d{2}').hasMatch(trimmed);
+}
