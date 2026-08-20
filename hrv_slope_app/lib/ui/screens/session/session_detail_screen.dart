@@ -11,6 +11,7 @@ import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/ui/screens/reports/individual_report_screen.dart';
 import 'package:hrv_slope_app/ui/screens/session/session_edit_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/utils/session_datetime_format.dart';
 
 class SessionDetailScreen extends StatefulWidget {
   final AppDatabase database;
@@ -85,7 +86,9 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         title: const Text('Delete session?'),
         content: Text(
           'Delete ${detail.session.taskName ?? 'this session'} for '
-          '${detail.athlete.name} on ${detail.session.date}? This cannot be '
+          '${detail.athlete.name} on '
+          '${formatSessionDateForDisplay(detail.session.date)}? '
+          'This cannot be '
           'undone.',
         ),
         actions: [
@@ -159,7 +162,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         children: [
           _section('Session', [
             _row('Athlete', detail.athlete.name),
-            _row('Date/time', session.date),
+            _row('Date/time', formatSessionDateForDisplay(session.date)),
             _row('Task/session', session.taskName),
             _row('Sport', session.sport),
             _row('Session type', session.sessionType),

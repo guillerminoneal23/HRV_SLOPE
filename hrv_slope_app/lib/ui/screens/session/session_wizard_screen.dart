@@ -17,6 +17,7 @@ import 'package:hrv_slope_app/shared/engine/calculation_preview.dart';
 import 'package:hrv_slope_app/shared/engine/intensity_resolver.dart';
 import 'package:hrv_slope_app/shared/engine/nomogram_engine.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/utils/session_datetime_format.dart';
 import 'package:hrv_slope_app/ui/widgets/reusable_tag_text_field.dart';
 import 'package:hrv_slope_app/ui/widgets/rr_input_widget.dart';
 
@@ -45,6 +46,7 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
   final _contextCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   DateTime _sessionDate = DateTime.now();
+  TimeOfDay? _sessionTime;
   SessionType _sessionType = SessionType.training;
   late final ReusableTagService _tagService;
   Map<ReusableTagCategory, List<ReusableTag>> _tags = {};
@@ -339,8 +341,7 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
       final winStart = double.parse(_winStartCtrl.text);
       final winEnd = double.parse(_winEndCtrl.text);
 
-      final dateStr =
-          '${_sessionDate.year}-${_sessionDate.month.toString().padLeft(2, '0')}-${_sessionDate.day.toString().padLeft(2, '0')}';
+      final dateStr = _sessionDateValue();
 
       _preview = buildCalculationPreview(
         athleteName: a.name,
@@ -561,6 +562,7 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
       _winStartCtrl.text = '5';
       _winEndCtrl.text = '10';
       _sessionDate = DateTime.now();
+      _sessionTime = null;
       _sessionType = SessionType.training;
       _hrvMode = HrvInputMode.directRmssd;
       _rmssdRecSource = RmssdRecoverySourceType.manual;
@@ -586,6 +588,7 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
     if (_protocolCtrl.text.trim().isNotEmpty) return true;
     if (_contextCtrl.text.trim().isNotEmpty) return true;
     if (_notesCtrl.text.trim().isNotEmpty) return true;
+    if (_sessionTime != null) return true;
     if (_rmssdRecCtrl.text.trim().isNotEmpty) return true;
     if (_rmssdExCtrl.text.trim().isNotEmpty) return true;
     if (_rrRecResult != null) return true;
@@ -810,19 +813,33 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
         ),
         const SizedBox(height: 12),
         ListTile(
+          key: const Key('session_date_picker'),
           leading: const Icon(Icons.calendar_today),
-          title: Text(
-            '${_sessionDate.year}-${_sessionDate.month.toString().padLeft(2, '0')}-${_sessionDate.day.toString().padLeft(2, '0')}',
+          title: const Text('Date'),
+          subtitle: Text(formatDateOnly(_sessionDate)),
+          onTap: _pickSessionDate,
+        ),
+        ListTile(
+          key: const Key('session_time_optional'),
+          leading: const Icon(Icons.schedule),
+          title: const Text('Time (optional)'),
+          subtitle: Text(
+            _sessionTime == null ? 'Not set' : _formatTime(_sessionTime!),
           ),
-          onTap: () async {
-            final d = await showDatePicker(
-              context: context,
-              initialDate: _sessionDate,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now().add(const Duration(days: 1)),
-            );
-            if (d != null) setState(() => _sessionDate = d);
-          },
+          trailing: Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: _pickSessionTime,
+                child: Text(_sessionTime == null ? 'Add time' : 'Change'),
+              ),
+              if (_sessionTime != null)
+                TextButton(
+                  onPressed: () => setState(() => _sessionTime = null),
+                  child: const Text('Remove'),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         TextFormField(
@@ -1105,7 +1122,7 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
         const SizedBox(height: 12),
         _previewCard('Session', [
           _pRow('Athlete', p.athleteName),
-          _pRow('Date', p.sessionDate),
+          _pRow('Date', formatSessionDateForDisplay(p.sessionDate)),
           _pRow('Session', p.sessionName ?? '-'),
           _pRow('Sport', p.sport ?? '-'),
           _pRow(
@@ -1240,5 +1257,61 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _pickSessionDate() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _sessionDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (d != null) setState(() => _sessionDate = d);
+  }
+
+  Future<void> _pickSessionTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _sessionTime ?? _initialTimeForPicker(),
+      initialEntryMode: TimePickerEntryMode.input,
+      helpText: 'Session time',
+      hourLabelText: 'Hour',
+      minuteLabelText: 'Minute',
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(alwaysUse24HourFormat: true),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+    if (picked != null) setState(() => _sessionTime = picked);
+  }
+
+  TimeOfDay _initialTimeForPicker() {
+    final now = DateTime.now();
+    if (_isSameDay(_sessionDate, now)) return TimeOfDay.fromDateTime(now);
+    return const TimeOfDay(hour: 12, minute: 0);
+  }
+
+  String _sessionDateValue() {
+    final time = _sessionTime;
+    if (time == null) return formatDateOnly(_sessionDate);
+    return DateTime(
+      _sessionDate.year,
+      _sessionDate.month,
+      _sessionDate.day,
+      time.hour,
+      time.minute,
+    ).toIso8601String();
+  }
+
+  String _formatTime(TimeOfDay value) {
+    return '${value.hour.toString().padLeft(2, '0')}:'
+        '${value.minute.toString().padLeft(2, '0')}';
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }

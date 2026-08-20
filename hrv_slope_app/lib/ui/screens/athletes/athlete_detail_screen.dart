@@ -8,6 +8,7 @@ import 'package:hrv_slope_app/ui/screens/longitudinal/athlete_longitudinal_scree
 import 'package:hrv_slope_app/ui/screens/nomogram/individual_nomogram_screen.dart';
 import 'package:hrv_slope_app/ui/screens/session/session_detail_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/utils/session_datetime_format.dart';
 
 class AthleteDetailScreen extends StatefulWidget {
   final AppDatabase database;
@@ -261,10 +262,12 @@ class _SessionTile extends StatelessWidget {
           session.isDraft ? Icons.drafts : Icons.check_circle,
           color: session.isDraft ? AppColors.warning : AppColors.success,
         ),
-        title: Text(session.taskName ?? session.date),
+        title: Text(
+          session.taskName ?? formatSessionDateForDisplay(session.date),
+        ),
         subtitle: Text(
           [
-            session.date,
+            formatSessionDateForDisplay(session.date),
             if (session.sport != null) session.sport!,
             if (session.isDraft)
               'Draft'
