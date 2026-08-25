@@ -234,11 +234,9 @@ class TeamHeatmapLegend extends StatelessWidget {
                 ),
               ),
               SizedBox(width: 12),
-              _LegendSwatch(color: AppColors.classVeryHigh, label: 'Very high'),
-              SizedBox(width: 10),
               _LegendSwatch(
-                color: AppColors.classHighMod,
-                label: 'High/moderate',
+                color: AppColors.classVeryHigh,
+                label: 'Lower-than-expected',
               ),
               SizedBox(width: 10),
               _LegendSwatch(color: AppColors.classExpected, label: 'Expected'),
@@ -669,26 +667,14 @@ String _cellTooltip({
 }
 
 Color _classificationColor(String? value) {
-  switch (value) {
-    case 'very_high_internal_load':
-    case 'veryHighInternalLoad':
-    case 'Lower-than-expected recovery response':
-    case 'Lower-than-expected':
+  switch (recoveryResponseZoneForClassificationKey(value)) {
+    case RecoveryResponseZone.lowerThanExpected:
       return AppColors.classVeryHigh;
-    case 'high_or_moderate_internal_load':
-    case 'highOrModerateInternalLoad':
-      return AppColors.classHighMod;
-    case 'expected_response':
-    case 'expectedResponse':
-    case 'Expected recovery response':
-    case 'Expected':
+    case RecoveryResponseZone.expected:
       return AppColors.classExpected;
-    case 'low_internal_load_or_fast_recovery':
-    case 'lowInternalLoadOrFastRecovery':
-    case 'Favorable recovery response':
-    case 'Favorable':
+    case RecoveryResponseZone.favorable:
       return AppColors.classLowFast;
-    default:
+    case null:
       return AppColors.tertiary;
   }
 }

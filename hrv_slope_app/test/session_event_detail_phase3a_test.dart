@@ -351,6 +351,36 @@ void main() {
       expect(find.text('Archived athlete'), findsOneWidget);
     });
 
+    testWidgets('aggregates lower recovery-response classes visibly', (
+      tester,
+    ) async {
+      final seed = await _seedEvent(
+        db,
+        count: 8,
+        classifications: [
+          'very_high_internal_load',
+          'very_high_internal_load',
+          'high_or_moderate_internal_load',
+          'high_or_moderate_internal_load',
+          'high_or_moderate_internal_load',
+          'expected_response',
+          'low_internal_load_or_fast_recovery',
+          'low_internal_load_or_fast_recovery',
+        ],
+      );
+
+      await _pump(
+        tester,
+        SessionEventDetailScreen(database: db, eventId: seed.eventId),
+      );
+
+      expect(find.text('Lower-than-expected: 5'), findsOneWidget);
+      expect(find.text('Expected: 1'), findsOneWidget);
+      expect(find.text('Favorable: 2'), findsOneWidget);
+      expect(find.text('Lower-than-expected: 2'), findsNothing);
+      expect(find.text('Lower-than-expected: 3'), findsNothing);
+    });
+
     testWidgets('team detail opens a recent archived-team event', (
       tester,
     ) async {
@@ -367,6 +397,27 @@ void main() {
       expect(find.byType(SessionEventDetailScreen), findsOneWidget);
       expect(find.text('Phase 3A Team'), findsOneWidget);
       expect(find.text('Archived team'), findsOneWidget);
+    });
+
+    testWidgets('team detail formats date-only events without midnight', (
+      tester,
+    ) async {
+      final dateOnly = await _seedEvent(db, count: 1, eventDate: '2026-08-20');
+      await _seedEvent(
+        db,
+        teamId: dateOnly.teamId,
+        count: 1,
+        eventDate: '2026-08-20T10:00:00',
+      );
+
+      await _pump(
+        tester,
+        TeamDetailScreen(database: db, teamId: dateOnly.teamId!),
+      );
+
+      expect(find.textContaining('2026-08-20 00:00'), findsNothing);
+      expect(find.textContaining('2026-08-20 10:00'), findsOneWidget);
+      expect(find.textContaining('2026-08-20'), findsWidgets);
     });
   });
 }
@@ -391,8 +442,8 @@ Future<_SeedResult> _seedEvent(
   List<String?>? loadUnits,
   List<String?>? classifications,
   List<String>? athleteNames,
+  String eventDate = '2026-08-18T10:00:00',
 }) async {
-  const date = '2026-08-18T10:00:00';
   final now = DateTime.now().toIso8601String();
   final effectiveTeamId = noTeam
       ? null
@@ -405,7 +456,7 @@ Future<_SeedResult> _seedEvent(
   final eventId = await db.sessionEventsDao.createEvent(
     SessionEventsCompanion.insert(
       teamId: drift.Value(effectiveTeamId),
-      date: date,
+      date: eventDate,
       taskName: const drift.Value('RSA'),
       sport: const drift.Value('Soccer'),
       sessionType: const drift.Value('Training'),
@@ -450,7 +501,7 @@ Future<_SeedResult> _seedEvent(
       SessionsCompanion.insert(
         athleteId: athleteId,
         eventId: drift.Value(eventId),
-        date: date,
+        date: eventDate,
         taskName: const drift.Value('RSA'),
         sport: const drift.Value('Soccer'),
         sessionType: const drift.Value('Training'),

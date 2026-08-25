@@ -1,6 +1,7 @@
 library;
 
 import 'package:hrv_slope_app/shared/engine/team_heatmap_builder.dart';
+import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 
 enum TeamHeatmapFallbackFilter { all, fallbackOnly, measuredOnly }
 
@@ -35,56 +36,34 @@ extension TeamHeatmapSessionStateFilterLabel on TeamHeatmapSessionStateFilter {
 class TeamHeatmapClassificationOption {
   final String id;
   final String label;
-  final List<String> values;
+  final RecoveryResponseZone zone;
 
   const TeamHeatmapClassificationOption({
     required this.id,
     required this.label,
-    required this.values,
+    required this.zone,
   });
 
   bool matches(String? classification) {
-    if (classification == null) return false;
-    final normalized = _normalizeClassification(classification);
-    return values.map(_normalizeClassification).contains(normalized);
+    return recoveryResponseZoneForClassificationKey(classification) == zone;
   }
 }
 
 const teamHeatmapClassificationOptions = [
   TeamHeatmapClassificationOption(
-    id: 'very_high_internal_load',
-    label: 'Very high',
-    values: [
-      'very_high_internal_load',
-      'veryHighInternalLoad',
-      'Lower-than-expected recovery response',
-      'Lower-than-expected',
-    ],
+    id: 'lower_than_expected',
+    label: 'Lower-than-expected',
+    zone: RecoveryResponseZone.lowerThanExpected,
   ),
   TeamHeatmapClassificationOption(
-    id: 'high_or_moderate_internal_load',
-    label: 'High/moderate',
-    values: ['high_or_moderate_internal_load', 'highOrModerateInternalLoad'],
-  ),
-  TeamHeatmapClassificationOption(
-    id: 'expected_response',
+    id: 'expected',
     label: 'Expected',
-    values: [
-      'expected_response',
-      'expectedResponse',
-      'Expected recovery response',
-      'Expected',
-    ],
+    zone: RecoveryResponseZone.expected,
   ),
   TeamHeatmapClassificationOption(
-    id: 'low_internal_load_or_fast_recovery',
+    id: 'favorable',
     label: 'Favorable',
-    values: [
-      'low_internal_load_or_fast_recovery',
-      'lowInternalLoadOrFastRecovery',
-      'Favorable recovery response',
-      'Favorable',
-    ],
+    zone: RecoveryResponseZone.favorable,
   ),
 ];
 
@@ -224,14 +203,7 @@ TeamHeatmapFilteredView filterTeamHeatmap(
 List<TeamHeatmapClassificationOption> availableTeamHeatmapClassifications(
   TeamHeatmapData data,
 ) {
-  return [
-    for (final option in teamHeatmapClassificationOptions)
-      if (data.rows
-          .expand((row) => row.cells)
-          .where((cell) => cell.state == TeamHeatmapCellState.valid)
-          .any((cell) => option.matches(cell.classification)))
-        option,
-  ];
+  return teamHeatmapClassificationOptions;
 }
 
 bool _cellMatchesFilter(TeamHeatmapCell cell, TeamHeatmapFilter filter) {
@@ -318,10 +290,7 @@ TeamHeatmapFilteredAthleteStats _buildStats(
 }
 
 String? _classificationOptionIdFor(String? classification) {
-  for (final option in teamHeatmapClassificationOptions) {
-    if (option.matches(classification)) return option.id;
-  }
-  return null;
+  return recoveryResponseZoneForClassificationKey(classification)?.id;
 }
 
 double? _median(List<double> values) {
@@ -330,8 +299,4 @@ double? _median(List<double> values) {
   final mid = sorted.length ~/ 2;
   if (sorted.length.isOdd) return sorted[mid];
   return (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
-String _normalizeClassification(String value) {
-  return value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 }

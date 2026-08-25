@@ -146,6 +146,86 @@ void main() {
       expect(sessions.single.date, isNot(contains('T')));
     });
 
+    testWidgets('failed individual save rolls back the attempted session', (
+      tester,
+    ) async {
+      await db.customStatement('''
+CREATE TRIGGER fail_measurements_hrv_insert
+BEFORE INSERT ON measurements_hrv
+BEGIN
+  SELECT RAISE(ABORT, 'forced measurement failure');
+END;
+''');
+
+      await _pumpWizardAtSessionStep(tester, db);
+      await _completeAndSaveSession(tester);
+
+      expect(find.textContaining('Save error:'), findsOneWidget);
+      expect(await _tableCount(db, 'sessions'), 0);
+      expect(await _tableCount(db, 'measurements_hrv'), 0);
+      expect(await _tableCount(db, 'intensity_variables'), 0);
+    });
+
+    testWidgets(
+      'successful individual save writes session, HRV and load variables',
+      (tester) async {
+        await _pumpWizardAtSessionStep(tester, db);
+
+        await _tapNext(tester);
+        expect(find.text('External Load Variables'), findsOneWidget);
+        await tester.enterText(
+          find.widgetWithText(TextFormField, '% MAS (%)'),
+          '80',
+        );
+        await _tapNext(tester);
+
+        expect(find.text('Internal Load Variables'), findsOneWidget);
+        await tester.enterText(find.byType(TextFormField).first, '6');
+        await _tapNext(tester);
+
+        expect(find.text('HRV / RMSSD Data'), findsOneWidget);
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'RMSSD Recovery (ms) *'),
+          '20',
+        );
+        await _tapNext(tester);
+
+        expect(find.text('Calculation Preview'), findsOneWidget);
+        await tester.tap(find.widgetWithText(ElevatedButton, 'Save Session'));
+        await tester.pumpAndSettle();
+
+        final session = (await db.sessionsDao.getAllSessions()).single;
+        final measurements = await db.sessionsDao.getHrvMeasurements(
+          session.id,
+        );
+        final variables = await db.sessionsDao.getVariablesForSession(
+          session.id,
+        );
+
+        expect(session.date, _todayDateOnly());
+        expect(session.createdAt, isNot(session.date));
+        expect(measurements, hasLength(1));
+        expect(measurements.single.phase, 'recovery');
+        expect(variables.map((variable) => variable.category).toSet(), {
+          'external',
+          'internal',
+          'derived',
+        });
+        expect(
+          variables.map((variable) => variable.name),
+          contains('raw_slope'),
+        );
+        expect(
+          variables.map((variable) => variable.name),
+          contains('interpreted_slope'),
+        );
+        expect(
+          variables.map((variable) => variable.name),
+          contains('itl_index'),
+        );
+      },
+    );
+
     test(
       'same-day sessions remain independent and order by ISO time',
       () async {
@@ -465,4 +545,11 @@ String _todayDateOnly() {
   return '${now.year.toString().padLeft(4, '0')}-'
       '${now.month.toString().padLeft(2, '0')}-'
       '${now.day.toString().padLeft(2, '0')}';
+}
+
+Future<int> _tableCount(AppDatabase db, String tableName) async {
+  final row = await db
+      .customSelect('SELECT COUNT(*) AS count FROM $tableName')
+      .getSingle();
+  return row.read<int>('count');
 }

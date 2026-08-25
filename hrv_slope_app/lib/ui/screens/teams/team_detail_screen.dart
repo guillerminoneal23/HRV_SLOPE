@@ -5,6 +5,7 @@ import 'package:hrv_slope_app/ui/screens/teams/session_event_detail_screen.dart'
 import 'package:hrv_slope_app/ui/screens/teams/team_form_dialog.dart';
 import 'package:hrv_slope_app/ui/screens/teams/team_longitudinal_heatmap_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/utils/session_datetime_format.dart';
 
 class TeamDetailScreen extends StatefulWidget {
   final AppDatabase database;
@@ -323,7 +324,7 @@ class _RecentEventsSection extends StatelessWidget {
                   title: Text(item.event.taskName ?? 'Session Event'),
                   subtitle: Text(
                     [
-                      _formatEventDate(item.event.date),
+                      formatSessionDateForDisplay(item.event.date),
                       if (item.event.protocolName != null)
                         item.event.protocolName!,
                       _participantCountLabel(item.participantCount),
@@ -529,19 +530,6 @@ class _StatusChip extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatEventDate(String raw) {
-  final parsed = DateTime.tryParse(raw);
-  if (parsed == null) return raw;
-  final date =
-      '${parsed.year.toString().padLeft(4, '0')}-'
-      '${parsed.month.toString().padLeft(2, '0')}-'
-      '${parsed.day.toString().padLeft(2, '0')}';
-  final time =
-      '${parsed.hour.toString().padLeft(2, '0')}:'
-      '${parsed.minute.toString().padLeft(2, '0')}';
-  return '$date $time';
 }
 
 String _participantCountLabel(int count) {

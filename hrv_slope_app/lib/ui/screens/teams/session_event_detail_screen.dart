@@ -93,7 +93,9 @@ class _SessionEventDetailScreenState extends State<SessionEventDetailScreen> {
             const SizedBox(height: 12),
             _FilterBar(
               searchCtrl: _searchCtrl,
-              classifications: report.classificationCounts,
+              classifications: _visibleClassificationCounts(
+                report.classificationCounts,
+              ),
               classificationFilter: _classificationFilter,
               fallbackFilter: _fallbackFilter,
               incompleteOnly: _incompleteOnly,
@@ -128,7 +130,8 @@ class _SessionEventDetailScreenState extends State<SessionEventDetailScreen> {
         return false;
       }
       if (_classificationFilter != _allClassifications &&
-          row.classification != _classificationFilter) {
+          recoveryResponseZoneForClassificationKey(row.classification)?.id !=
+              _classificationFilter) {
         return false;
       }
       if (_fallbackFilter == _FallbackFilter.fallback &&
@@ -318,9 +321,11 @@ class _ClassificationSummary extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final item in report.classificationCounts)
+                for (final item in _visibleClassificationCounts(
+                  report.classificationCounts,
+                ))
                   _ClassificationChip(
-                    classification: item.classification,
+                    classification: item.label,
                     label: '${item.label}: ${item.count}',
                   ),
                 if (report.classificationCounts.isEmpty)
@@ -344,7 +349,7 @@ class _ClassificationSummary extends StatelessWidget {
 
 class _FilterBar extends StatelessWidget {
   final TextEditingController searchCtrl;
-  final List<TeamEventClassificationCount> classifications;
+  final List<_VisibleClassificationCount> classifications;
   final String classificationFilter;
   final _FallbackFilter fallbackFilter;
   final bool incompleteOnly;
@@ -402,7 +407,7 @@ class _FilterBar extends StatelessWidget {
                   ),
                   for (final item in classifications)
                     DropdownMenuItem(
-                      value: item.classification,
+                      value: item.zone.id,
                       child: Text(item.label),
                     ),
                 ],
@@ -776,24 +781,41 @@ Widget _rmssdExerciseCell(TeamEventReportRow row) {
 }
 
 Color _classificationColor(String? value) {
-  switch (value) {
-    case 'very_high_internal_load':
-    case 'veryHighInternalLoad':
-    case 'Lower-than-expected recovery response':
-    case 'Lower-than-expected':
+  switch (recoveryResponseZoneForClassificationKey(value)) {
+    case RecoveryResponseZone.lowerThanExpected:
       return AppColors.classVeryHigh;
-    case 'high_or_moderate_internal_load':
-    case 'highOrModerateInternalLoad':
-      return AppColors.classHighMod;
-    case 'expected_response':
-    case 'expectedResponse':
+    case RecoveryResponseZone.expected:
       return AppColors.classExpected;
-    case 'low_internal_load_or_fast_recovery':
-    case 'lowInternalLoadOrFastRecovery':
+    case RecoveryResponseZone.favorable:
       return AppColors.classLowFast;
-    default:
+    case null:
       return AppColors.tertiary;
   }
+}
+
+List<_VisibleClassificationCount> _visibleClassificationCounts(
+  List<TeamEventClassificationCount> rawCounts,
+) {
+  final counts = <RecoveryResponseZone, int>{};
+  for (final item in rawCounts) {
+    final zone = recoveryResponseZoneForClassificationKey(item.classification);
+    if (zone == null) continue;
+    counts[zone] = (counts[zone] ?? 0) + item.count;
+  }
+  return [
+    for (final zone in visibleRecoveryResponseZones)
+      if ((counts[zone] ?? 0) > 0)
+        _VisibleClassificationCount(zone: zone, count: counts[zone]!),
+  ];
+}
+
+class _VisibleClassificationCount {
+  final RecoveryResponseZone zone;
+  final int count;
+
+  const _VisibleClassificationCount({required this.zone, required this.count});
+
+  String get label => zone.shortLabel;
 }
 
 String _formatDate(String raw) {

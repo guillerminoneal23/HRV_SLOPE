@@ -1,55 +1,82 @@
 library;
 
-String recoveryResponseLabelForClassificationKey(String? value) {
-  switch (value) {
-    case 'very_high_internal_load':
-    case 'veryHighInternalLoad':
-    case 'high_or_moderate_internal_load':
-    case 'highOrModerateInternalLoad':
-    case 'Lower-than-expected recovery response':
-    case 'Lower-than-expected':
-      return 'Lower-than-expected recovery response';
-    case 'expected_response':
-    case 'expectedResponse':
-    case 'Expected recovery response':
-    case 'Expected':
-      return 'Expected recovery response';
-    case 'low_internal_load_or_fast_recovery':
-    case 'lowInternalLoadOrFastRecovery':
-    case 'Favorable recovery response':
-    case 'Favorable':
-      return 'Favorable recovery response';
-    case null:
-      return '-';
-    default:
-      return value;
+enum RecoveryResponseZone { lowerThanExpected, expected, favorable }
+
+const visibleRecoveryResponseZones = [
+  RecoveryResponseZone.lowerThanExpected,
+  RecoveryResponseZone.expected,
+  RecoveryResponseZone.favorable,
+];
+
+extension RecoveryResponseZoneLabels on RecoveryResponseZone {
+  String get id {
+    switch (this) {
+      case RecoveryResponseZone.lowerThanExpected:
+        return 'lower_than_expected';
+      case RecoveryResponseZone.expected:
+        return 'expected';
+      case RecoveryResponseZone.favorable:
+        return 'favorable';
+    }
+  }
+
+  String get shortLabel {
+    switch (this) {
+      case RecoveryResponseZone.lowerThanExpected:
+        return 'Lower-than-expected';
+      case RecoveryResponseZone.expected:
+        return 'Expected';
+      case RecoveryResponseZone.favorable:
+        return 'Favorable';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case RecoveryResponseZone.lowerThanExpected:
+        return 'Lower-than-expected recovery response';
+      case RecoveryResponseZone.expected:
+        return 'Expected recovery response';
+      case RecoveryResponseZone.favorable:
+        return 'Favorable recovery response';
+    }
   }
 }
 
-String recoveryResponseShortLabelForClassificationKey(String? value) {
-  switch (value) {
+RecoveryResponseZone? recoveryResponseZoneForClassificationKey(String? value) {
+  switch (_normalizeRecoveryResponseValue(value)) {
     case 'very_high_internal_load':
-    case 'veryHighInternalLoad':
+    case 'veryhighinternalload':
     case 'high_or_moderate_internal_load':
-    case 'highOrModerateInternalLoad':
-    case 'Lower-than-expected recovery response':
-    case 'Lower-than-expected':
-      return 'Lower-than-expected';
+    case 'highormoderateinternalload':
+    case 'lower-than-expected recovery response':
+    case 'lower-than-expected':
+      return RecoveryResponseZone.lowerThanExpected;
     case 'expected_response':
-    case 'expectedResponse':
-    case 'Expected recovery response':
-    case 'Expected':
-      return 'Expected';
+    case 'expectedresponse':
+    case 'expected recovery response':
+    case 'expected':
+      return RecoveryResponseZone.expected;
     case 'low_internal_load_or_fast_recovery':
-    case 'lowInternalLoadOrFastRecovery':
-    case 'Favorable recovery response':
-    case 'Favorable':
-      return 'Favorable';
-    case null:
-      return '-';
+    case 'lowinternalloadorfastrecovery':
+    case 'favorable recovery response':
+    case 'favorable':
+      return RecoveryResponseZone.favorable;
     default:
-      return value;
+      return null;
   }
+}
+
+String recoveryResponseLabelForClassificationKey(String? value) {
+  final zone = recoveryResponseZoneForClassificationKey(value);
+  if (zone != null) return zone.label;
+  return value ?? '-';
+}
+
+String recoveryResponseShortLabelForClassificationKey(String? value) {
+  final zone = recoveryResponseZoneForClassificationKey(value);
+  if (zone != null) return zone.shortLabel;
+  return value ?? '-';
 }
 
 String recoveryResponseExportValueForClassificationKey(String? value) {
@@ -95,4 +122,8 @@ String intensitySourceForSlopeMessage(String source) {
     default:
       return 'Intensity source unavailable; recovery interpretation may be limited.';
   }
+}
+
+String _normalizeRecoveryResponseValue(String? value) {
+  return value?.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase() ?? '';
 }

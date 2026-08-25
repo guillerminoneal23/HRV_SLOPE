@@ -390,146 +390,150 @@ class _SessionWizardScreenState extends State<SessionWizardScreen> {
           ? rrPrep.artifactPercent
           : null;
 
-      // Insert session
-      final sessionId = await _db.sessionsDao.insertSession(
-        SessionsCompanion.insert(
-          athleteId: _selectedAthlete!.id,
-          date: dateStr,
-          taskName: drift.Value(p.sessionName),
-          sport: drift.Value(p.sport),
-          sessionType: drift.Value(_sessionType.name),
-          protocolName: drift.Value(
-            _protocolCtrl.text.trim().isEmpty
-                ? null
-                : _protocolCtrl.text.trim(),
-          ),
-          contextEnvironment: drift.Value(
-            _contextCtrl.text.trim().isEmpty ? null : _contextCtrl.text.trim(),
-          ),
-          isDraft: const drift.Value(false),
-          intensityPercent: drift.Value(p.intensityPercent),
-          intensitySource: drift.Value(p.intensityResolution?.method),
-          recoveryTimeMin: drift.Value(p.tUsedForSlope),
-          recoveryWindowStartMin: drift.Value(p.recoveryWindowStartMin),
-          recoveryWindowEndMin: drift.Value(p.recoveryWindowEndMin),
-          rmssdExercise: drift.Value(p.rmssdExercise),
-          rmssdExerciseIsDefault: drift.Value(p.usedFallbackExercise),
-          rmssdRecovery: drift.Value(p.rmssdRecovery),
-          slopeRaw: drift.Value(p.rawSlope),
-          slopeInterpreted: drift.Value(p.interpretedSlope),
-          itlIndex: drift.Value(p.itlIndex),
-          classification: drift.Value(p.classification),
-          hrvInputMode: drift.Value(hrvModeStr),
-          rmssdRecoverySource: drift.Value(recSourceStr),
-          rmssdExerciseSource: drift.Value(exSourceStr),
-          rrQualityFlag: drift.Value(rrQuality),
-          rrArtifactPercent: drift.Value(rrArtPct),
-          rrPreprocessingMode: drift.Value(p.rrPreprocessingMode?.name),
-          rrCorrectionEnabled: drift.Value(p.correctionEnabled),
-          rrCorrectionMethod: drift.Value(p.correctionMethod?.name),
-          rrRawRmssd: drift.Value(p.rawRmssd),
-          rrCorrectedRmssd: drift.Value(p.correctedRmssd),
-          rrRmssdUsed: drift.Value(
-            _hrvMode == HrvInputMode.rrIntervals ? p.rmssdUsedForSlope : null,
-          ),
-          rrArtifactCount: drift.Value(p.artifactCount),
-          rrQualityDecision: drift.Value(p.qualityDecision?.name),
-          rrQualityNotesJson: drift.Value(
-            p.qualityNotes.isEmpty ? null : jsonEncode(p.qualityNotes),
-          ),
-          rrRmssdDeltaPercent: drift.Value(rrPrep?.rmssdDeltaPercent),
-          notes: drift.Value(
-            _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-          ),
-          createdAt: now,
-        ),
-      );
-
-      // Insert HRV measurement
-      await _db.sessionsDao.insertHrvMeasurement(
-        MeasurementsHrvCompanion.insert(
-          sessionId: sessionId,
-          phase: 'recovery',
-          windowStartMin: drift.Value(p.recoveryWindowStartMin),
-          windowEndMin: drift.Value(p.recoveryWindowEndMin),
-          rmssd: drift.Value(p.rmssdRecovery),
-          createdAt: now,
-        ),
-      );
-
-      // Insert variables
-      final vars = <IntensityVariablesCompanion>[];
-      for (final v in p.externalVariables) {
-        vars.add(
-          IntensityVariablesCompanion.insert(
-            sessionId: sessionId,
-            category: v.category,
-            name: v.name,
-            unit: drift.Value(v.unit),
-            value: v.value,
-            source: drift.Value(v.source),
+      await _db.transaction(() async {
+        // Insert session
+        final sessionId = await _db.sessionsDao.insertSession(
+          SessionsCompanion.insert(
+            athleteId: _selectedAthlete!.id,
+            date: dateStr,
+            taskName: drift.Value(p.sessionName),
+            sport: drift.Value(p.sport),
+            sessionType: drift.Value(_sessionType.name),
+            protocolName: drift.Value(
+              _protocolCtrl.text.trim().isEmpty
+                  ? null
+                  : _protocolCtrl.text.trim(),
+            ),
+            contextEnvironment: drift.Value(
+              _contextCtrl.text.trim().isEmpty
+                  ? null
+                  : _contextCtrl.text.trim(),
+            ),
+            isDraft: const drift.Value(false),
+            intensityPercent: drift.Value(p.intensityPercent),
+            intensitySource: drift.Value(p.intensityResolution?.method),
+            recoveryTimeMin: drift.Value(p.tUsedForSlope),
+            recoveryWindowStartMin: drift.Value(p.recoveryWindowStartMin),
+            recoveryWindowEndMin: drift.Value(p.recoveryWindowEndMin),
+            rmssdExercise: drift.Value(p.rmssdExercise),
+            rmssdExerciseIsDefault: drift.Value(p.usedFallbackExercise),
+            rmssdRecovery: drift.Value(p.rmssdRecovery),
+            slopeRaw: drift.Value(p.rawSlope),
+            slopeInterpreted: drift.Value(p.interpretedSlope),
+            itlIndex: drift.Value(p.itlIndex),
+            classification: drift.Value(p.classification),
+            hrvInputMode: drift.Value(hrvModeStr),
+            rmssdRecoverySource: drift.Value(recSourceStr),
+            rmssdExerciseSource: drift.Value(exSourceStr),
+            rrQualityFlag: drift.Value(rrQuality),
+            rrArtifactPercent: drift.Value(rrArtPct),
+            rrPreprocessingMode: drift.Value(p.rrPreprocessingMode?.name),
+            rrCorrectionEnabled: drift.Value(p.correctionEnabled),
+            rrCorrectionMethod: drift.Value(p.correctionMethod?.name),
+            rrRawRmssd: drift.Value(p.rawRmssd),
+            rrCorrectedRmssd: drift.Value(p.correctedRmssd),
+            rrRmssdUsed: drift.Value(
+              _hrvMode == HrvInputMode.rrIntervals ? p.rmssdUsedForSlope : null,
+            ),
+            rrArtifactCount: drift.Value(p.artifactCount),
+            rrQualityDecision: drift.Value(p.qualityDecision?.name),
+            rrQualityNotesJson: drift.Value(
+              p.qualityNotes.isEmpty ? null : jsonEncode(p.qualityNotes),
+            ),
+            rrRmssdDeltaPercent: drift.Value(rrPrep?.rmssdDeltaPercent),
+            notes: drift.Value(
+              _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+            ),
             createdAt: now,
           ),
         );
-      }
-      for (final v in p.internalVariables) {
-        vars.add(
-          IntensityVariablesCompanion.insert(
+
+        // Insert HRV measurement
+        await _db.sessionsDao.insertHrvMeasurement(
+          MeasurementsHrvCompanion.insert(
             sessionId: sessionId,
-            category: v.category,
-            name: v.name,
-            unit: drift.Value(v.unit),
-            value: v.value,
-            source: drift.Value(v.source),
+            phase: 'recovery',
+            windowStartMin: drift.Value(p.recoveryWindowStartMin),
+            windowEndMin: drift.Value(p.recoveryWindowEndMin),
+            rmssd: drift.Value(p.rmssdRecovery),
             createdAt: now,
           ),
         );
-      }
-      // Derived variables
-      vars.add(
-        IntensityVariablesCompanion.insert(
-          sessionId: sessionId,
-          category: 'derived',
-          name: 'raw_slope',
-          value: p.rawSlope,
-          source: const drift.Value('calculated'),
-          createdAt: now,
-        ),
-      );
-      vars.add(
-        IntensityVariablesCompanion.insert(
-          sessionId: sessionId,
-          category: 'derived',
-          name: 'interpreted_slope',
-          value: p.interpretedSlope,
-          source: const drift.Value('calculated'),
-          createdAt: now,
-        ),
-      );
-      vars.add(
-        IntensityVariablesCompanion.insert(
-          sessionId: sessionId,
-          category: 'derived',
-          name: 'itl_index',
-          value: p.itlIndex,
-          source: const drift.Value('calculated'),
-          createdAt: now,
-        ),
-      );
-      if (p.intensityPercent != null) {
+
+        // Insert variables
+        final vars = <IntensityVariablesCompanion>[];
+        for (final v in p.externalVariables) {
+          vars.add(
+            IntensityVariablesCompanion.insert(
+              sessionId: sessionId,
+              category: v.category,
+              name: v.name,
+              unit: drift.Value(v.unit),
+              value: v.value,
+              source: drift.Value(v.source),
+              createdAt: now,
+            ),
+          );
+        }
+        for (final v in p.internalVariables) {
+          vars.add(
+            IntensityVariablesCompanion.insert(
+              sessionId: sessionId,
+              category: v.category,
+              name: v.name,
+              unit: drift.Value(v.unit),
+              value: v.value,
+              source: drift.Value(v.source),
+              createdAt: now,
+            ),
+          );
+        }
+        // Derived variables
         vars.add(
           IntensityVariablesCompanion.insert(
             sessionId: sessionId,
             category: 'derived',
-            name: 'intensity_percent',
-            value: p.intensityPercent!,
-            source: drift.Value(p.intensityResolution?.method),
-            isPrimaryForNomogram: const drift.Value(true),
+            name: 'raw_slope',
+            value: p.rawSlope,
+            source: const drift.Value('calculated'),
             createdAt: now,
           ),
         );
-      }
-      await _db.sessionsDao.insertVariables(vars);
+        vars.add(
+          IntensityVariablesCompanion.insert(
+            sessionId: sessionId,
+            category: 'derived',
+            name: 'interpreted_slope',
+            value: p.interpretedSlope,
+            source: const drift.Value('calculated'),
+            createdAt: now,
+          ),
+        );
+        vars.add(
+          IntensityVariablesCompanion.insert(
+            sessionId: sessionId,
+            category: 'derived',
+            name: 'itl_index',
+            value: p.itlIndex,
+            source: const drift.Value('calculated'),
+            createdAt: now,
+          ),
+        );
+        if (p.intensityPercent != null) {
+          vars.add(
+            IntensityVariablesCompanion.insert(
+              sessionId: sessionId,
+              category: 'derived',
+              name: 'intensity_percent',
+              value: p.intensityPercent!,
+              source: drift.Value(p.intensityResolution?.method),
+              isPrimaryForNomogram: const drift.Value(true),
+              createdAt: now,
+            ),
+          );
+        }
+        await _db.sessionsDao.insertVariables(vars);
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

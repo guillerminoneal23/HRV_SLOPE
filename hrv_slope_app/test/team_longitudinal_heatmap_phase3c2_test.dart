@@ -30,7 +30,7 @@ void main() {
 
       final view = filterTeamHeatmap(
         data,
-        const TeamHeatmapFilter(classificationOptionIds: {'expected_response'}),
+        const TeamHeatmapFilter(classificationOptionIds: {'expected'}),
       );
       final alpha = _filteredRow(view, 'Alpha');
 
@@ -49,6 +49,94 @@ void main() {
         'expected_response',
       );
     });
+
+    test(
+      'lower-than-expected filter includes both stored lower keys',
+      () async {
+        final teamId = await db.teamsDao.createTeam(name: 'Three Zone Team');
+        final athleteId = await _insertAthlete(db, name: 'Alpha');
+        await db.teamsDao.assignAthleteToTeam(
+          athleteId: athleteId,
+          teamId: teamId,
+        );
+        final classifications = <String, String>{
+          'veryHigh': 'very_high_internal_load',
+          'highMod': 'high_or_moderate_internal_load',
+          'expected': 'expected_response',
+          'favorable': 'low_internal_load_or_fast_recovery',
+        };
+        final eventIds = <String, int>{};
+        var day = 1;
+        for (final entry in classifications.entries) {
+          final eventId = await _insertEvent(
+            db,
+            teamId: teamId,
+            date: '2026-07-${day.toString().padLeft(2, '0')}T10:00:00',
+            taskName: entry.key,
+          );
+          eventIds[entry.key] = eventId;
+          await _insertSession(
+            db,
+            athleteId: athleteId,
+            eventId: eventId,
+            date: '2026-07-${day.toString().padLeft(2, '0')}T10:00:00',
+            taskName: entry.key,
+            loadValue: 80 + day.toDouble(),
+            rmssdExercise: 5,
+            rmssdExerciseIsDefault: false,
+            rmssdExerciseSource: 'measured',
+            rmssdRecovery: 20 + day.toDouble(),
+            slope: 0.2 + day / 100,
+            classification: entry.value,
+          );
+          day++;
+        }
+
+        final data = await _loadData(db, teamId);
+        final lowerView = filterTeamHeatmap(
+          data,
+          const TeamHeatmapFilter(
+            classificationOptionIds: {'lower_than_expected'},
+          ),
+        );
+        final lowerRow = _filteredRow(lowerView, 'Alpha');
+        expect(_filteredCell(lowerRow, eventIds['veryHigh']!).matches, isTrue);
+        expect(_filteredCell(lowerRow, eventIds['highMod']!).matches, isTrue);
+        expect(_filteredCell(lowerRow, eventIds['expected']!).matches, isFalse);
+        expect(
+          _filteredCell(lowerRow, eventIds['favorable']!).matches,
+          isFalse,
+        );
+
+        final expectedView = filterTeamHeatmap(
+          data,
+          const TeamHeatmapFilter(classificationOptionIds: {'expected'}),
+        );
+        final expectedRow = _filteredRow(expectedView, 'Alpha');
+        expect(
+          _filteredCell(expectedRow, eventIds['expected']!).matches,
+          isTrue,
+        );
+        expect(
+          _filteredCell(expectedRow, eventIds['veryHigh']!).matches,
+          isFalse,
+        );
+
+        final favorableView = filterTeamHeatmap(
+          data,
+          const TeamHeatmapFilter(classificationOptionIds: {'favorable'}),
+        );
+        final favorableRow = _filteredRow(favorableView, 'Alpha');
+        expect(
+          _filteredCell(favorableRow, eventIds['favorable']!).matches,
+          isTrue,
+        );
+        expect(
+          _filteredCell(favorableRow, eventIds['highMod']!).cell.classification,
+          'high_or_moderate_internal_load',
+        );
+      },
+    );
 
     test('separates fallback from measured 4 ms', () async {
       final seed = await _seed3c2Heatmap(db);
@@ -158,7 +246,7 @@ void main() {
         final view = filterTeamHeatmap(
           data,
           const TeamHeatmapFilter(
-            classificationOptionIds: {'expected_response'},
+            classificationOptionIds: {'expected'},
             fallbackFilter: TeamHeatmapFallbackFilter.measuredOnly,
           ),
         );
@@ -202,9 +290,7 @@ void main() {
 
       expect(find.text('No filters active'), findsOneWidget);
       await tester.tap(
-        find.byKey(
-          const Key('team_heatmap_classification_filter_expected_response'),
-        ),
+        find.byKey(const Key('team_heatmap_classification_filter_expected')),
       );
       await tester.pumpAndSettle();
       expect(find.text('1 filter active'), findsOneWidget);
@@ -235,6 +321,38 @@ void main() {
       expect(find.text('Archived Player'), findsOneWidget);
     });
 
+    testWidgets('legend exposes three recovery-response zones', (tester) async {
+      final seed = await _seed3c2Heatmap(db);
+
+      await _pump(
+        tester,
+        TeamLongitudinalHeatmapScreen(database: db, teamId: seed.teamId),
+      );
+
+      final legend = find.byKey(const Key('team_heatmap_legend'));
+      expect(legend, findsOneWidget);
+      expect(
+        find.descendant(of: legend, matching: find.text('Lower-than-expected')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: legend, matching: find.text('Expected')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: legend, matching: find.text('Favorable')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: legend, matching: find.text('Very high')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: legend, matching: find.text('High/moderate')),
+        findsNothing,
+      );
+    });
+
     testWidgets('keeps selected classification visible after date reload', (
       tester,
     ) async {
@@ -246,7 +364,7 @@ void main() {
       );
 
       final expectedChip = find.byKey(
-        const Key('team_heatmap_classification_filter_expected_response'),
+        const Key('team_heatmap_classification_filter_expected'),
       );
       await tester.tap(expectedChip);
       await tester.pumpAndSettle();
@@ -462,9 +580,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(
-        find.byKey(
-          const Key('team_heatmap_classification_filter_expected_response'),
-        ),
+        find.byKey(const Key('team_heatmap_classification_filter_expected')),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('team_heatmap_fallback_filter')));
@@ -512,9 +628,7 @@ void main() {
         tester
             .widget<FilterChip>(
               find.byKey(
-                const Key(
-                  'team_heatmap_classification_filter_expected_response',
-                ),
+                const Key('team_heatmap_classification_filter_expected'),
               ),
             )
             .selected,
@@ -774,9 +888,7 @@ void main() {
 
       expect(find.byKey(const Key('team_heatmap_grid')), findsOneWidget);
       await tester.tap(
-        find.byKey(
-          const Key('team_heatmap_classification_filter_expected_response'),
-        ),
+        find.byKey(const Key('team_heatmap_classification_filter_expected')),
       );
       await tester.pumpAndSettle();
       expect(find.text('1 filter active'), findsOneWidget);
