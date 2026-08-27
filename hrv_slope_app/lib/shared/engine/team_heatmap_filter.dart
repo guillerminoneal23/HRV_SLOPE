@@ -181,7 +181,7 @@ TeamHeatmapFilteredView filterTeamHeatmap(
       for (final cell in row.cells)
         TeamHeatmapFilteredCell(
           cell: cell,
-          matches: _cellMatchesFilter(cell, filter),
+          matches: teamHeatmapCellMatchesFilter(cell, filter),
         ),
     ];
     if (filter.hasCellFilters && !cells.any((cell) => cell.matches)) {
@@ -206,7 +206,10 @@ List<TeamHeatmapClassificationOption> availableTeamHeatmapClassifications(
   return teamHeatmapClassificationOptions;
 }
 
-bool _cellMatchesFilter(TeamHeatmapCell cell, TeamHeatmapFilter filter) {
+bool teamHeatmapCellMatchesFilter(
+  TeamHeatmapCell cell,
+  TeamHeatmapFilter filter,
+) {
   if (!filter.hasCellFilters) return true;
   if (!_matchesState(cell, filter.stateFilter)) return false;
   if (!_matchesFallback(cell, filter.fallbackFilter)) return false;

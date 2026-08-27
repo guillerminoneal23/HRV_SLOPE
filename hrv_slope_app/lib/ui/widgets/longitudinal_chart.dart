@@ -105,6 +105,7 @@ class LongitudinalChart extends StatelessWidget {
   final double? yInterval;
   final List<LongitudinalChartReferenceSeries> referenceSeries;
   final Widget? headerTrailing;
+  final bool connectMissingPoints;
 
   const LongitudinalChart({
     super.key,
@@ -120,6 +121,7 @@ class LongitudinalChart extends StatelessWidget {
     this.yInterval,
     this.referenceSeries = const [],
     this.headerTrailing,
+    this.connectMissingPoints = true,
   });
 
   @override
@@ -131,6 +133,7 @@ class LongitudinalChart extends StatelessWidget {
     final referenceBars = [
       for (final series in referenceSeries) ..._referenceBars(series),
     ];
+    final primaryBars = _primaryBars(valid);
     final hasReferenceLine = referenceBars.any((bar) => bar.spots.length >= 2);
     final yScale = resolveLongitudinalYAxisScale(
       [
@@ -182,35 +185,7 @@ class LongitudinalChart extends StatelessWidget {
                     maxX: (points.length - 1).toDouble(),
                     minY: yScale.minY,
                     maxY: yScale.maxY,
-                    lineBarsData: [
-                      if (valid.isNotEmpty)
-                        LineChartBarData(
-                          spots: [
-                            for (final item in valid)
-                              FlSpot(item.index.toDouble(), item.point.value!),
-                          ],
-                          isCurved: false,
-                          color: AppColors.primary,
-                          barWidth: 2,
-                          dotData: FlDotData(
-                            show: true,
-                            getDotPainter:
-                                (spot, xPercentage, bar, indexInBar) {
-                                  final point = _pointForSpot(spot);
-                                  final selected =
-                                      point?.sessionId != null &&
-                                      point?.sessionId == selectedSessionId;
-                                  return FlDotCirclePainter(
-                                    radius: selected ? 6 : 4,
-                                    color: point?.color ?? AppColors.tertiary,
-                                    strokeWidth: selected ? 2 : 1,
-                                    strokeColor: Colors.white,
-                                  );
-                                },
-                          ),
-                        ),
-                      ...referenceBars,
-                    ],
+                    lineBarsData: [...primaryBars, ...referenceBars],
                     gridData: FlGridData(
                       show: true,
                       getDrawingHorizontalLine: (_) => FlLine(
@@ -360,6 +335,61 @@ class LongitudinalChart extends StatelessWidget {
     }
     flushSegment();
     return bars;
+  }
+
+  List<LineChartBarData> _primaryBars(
+    List<({int index, LongitudinalChartPoint point})> valid,
+  ) {
+    if (valid.isEmpty) return const [];
+    if (connectMissingPoints) return [_primaryBar(valid)];
+
+    final bars = <LineChartBarData>[];
+    var segment = <({int index, LongitudinalChartPoint point})>[];
+
+    void flushSegment() {
+      if (segment.isEmpty) return;
+      bars.add(_primaryBar(segment));
+      segment = <({int index, LongitudinalChartPoint point})>[];
+    }
+
+    for (var i = 0; i < points.length; i++) {
+      final point = points[i];
+      if (point.value == null) {
+        flushSegment();
+      } else {
+        segment.add((index: i, point: point));
+      }
+    }
+    flushSegment();
+    return bars;
+  }
+
+  LineChartBarData _primaryBar(
+    List<({int index, LongitudinalChartPoint point})> values,
+  ) {
+    return LineChartBarData(
+      spots: [
+        for (final item in values)
+          FlSpot(item.index.toDouble(), item.point.value!),
+      ],
+      isCurved: false,
+      color: AppColors.primary,
+      barWidth: 2,
+      dotData: FlDotData(
+        show: true,
+        getDotPainter: (spot, xPercentage, bar, indexInBar) {
+          final point = _pointForSpot(spot);
+          final selected =
+              point?.sessionId != null && point?.sessionId == selectedSessionId;
+          return FlDotCirclePainter(
+            radius: selected ? 6 : 4,
+            color: point?.color ?? AppColors.tertiary,
+            strokeWidth: selected ? 2 : 1,
+            strokeColor: Colors.white,
+          );
+        },
+      ),
+    );
   }
 
   LineChartBarData _referenceBar(

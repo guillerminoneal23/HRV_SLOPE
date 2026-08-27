@@ -5,10 +5,13 @@ import 'package:hrv_slope_app/data/database/app_database.dart';
 import 'package:hrv_slope_app/shared/engine/recovery_response_labels.dart';
 import 'package:hrv_slope_app/shared/engine/team_heatmap_builder.dart';
 import 'package:hrv_slope_app/shared/engine/team_heatmap_filter.dart';
+import 'package:hrv_slope_app/shared/engine/team_load_trend_builder.dart';
 import 'package:hrv_slope_app/ui/screens/session/session_detail_screen.dart';
 import 'package:hrv_slope_app/ui/screens/teams/session_event_detail_screen.dart';
 import 'package:hrv_slope_app/ui/theme/app_theme.dart';
+import 'package:hrv_slope_app/ui/utils/session_datetime_format.dart';
 import 'package:hrv_slope_app/ui/widgets/team_heatmap_grid.dart';
+import 'package:hrv_slope_app/ui/widgets/team_load_trend_panel.dart';
 
 class TeamLongitudinalHeatmapScreen extends StatefulWidget {
   final AppDatabase database;
@@ -37,6 +40,8 @@ class _TeamLongitudinalHeatmapScreenState
       TeamHeatmapSessionStateFilter.all;
   String? _appliedDateFrom;
   String? _appliedDateTo;
+  String _selectedLoadDefinitionId = teamLoadSlopeOnlyId;
+  int? _selectedTrendAthleteId;
   TeamHeatmapData? _data;
   String? _error;
   bool _loading = true;
@@ -93,10 +98,25 @@ class _TeamLongitudinalHeatmapScreenState
         });
         return;
       }
+      final nextData = buildTeamHeatmap(bundle);
+      final availableLoadDefinitionIds = availableTeamLoadDefinitions(
+        nextData,
+      ).map((definition) => definition.id).toSet();
+      final selectedAthleteStillExists =
+          _selectedTrendAthleteId == null ||
+          nextData.rows.any((row) => row.athlete.id == _selectedTrendAthleteId);
+
       setState(() {
-        _data = buildTeamHeatmap(bundle);
+        _data = nextData;
         _appliedDateFrom = draftDateFrom;
         _appliedDateTo = draftDateTo;
+        if (_selectedLoadDefinitionId != teamLoadSlopeOnlyId &&
+            !availableLoadDefinitionIds.contains(_selectedLoadDefinitionId)) {
+          _selectedLoadDefinitionId = teamLoadSlopeOnlyId;
+        }
+        if (!selectedAthleteStillExists) {
+          _selectedTrendAthleteId = null;
+        }
         _loading = false;
       });
     } catch (error) {
@@ -126,49 +146,101 @@ class _TeamLongitudinalHeatmapScreenState
     final filter = _currentFilter();
     final filteredView = filterTeamHeatmap(data, filter);
     final activeFilterCount = _activeFilterCount(filter);
+    final loadDefinitions = availableTeamLoadDefinitions(data);
+    final trendAthleteRows = [for (final row in filteredView.rows) row.row];
+    final header = _Header(
+      data: data,
+      filteredView: filteredView,
+      periodLabel: _periodLabel(data),
+    );
+    final filters = _Filters(
+      dateFromCtrl: _dateFromCtrl,
+      dateToCtrl: _dateToCtrl,
+      searchCtrl: _searchCtrl,
+      classificationOptions: teamHeatmapClassificationOptions,
+      selectedClassifications: _classificationFilters,
+      fallbackFilter: _fallbackFilter,
+      stateFilter: _stateFilter,
+      activeFilterCount: activeFilterCount,
+      onApply: _load,
+      onClassificationChanged: _setClassificationFilter,
+      onFallbackChanged: (value) => setState(() => _fallbackFilter = value),
+      onStateChanged: (value) => setState(() => _stateFilter = value),
+      onReset: _resetFilters,
+    );
+    final grid = TeamHeatmapGrid(
+      data: data,
+      view: filteredView,
+      onCellSelected: _showCellDetail,
+      onEventSelected: _openEvent,
+    );
+    final trendPanel = TeamLoadTrendPanel(
+      data: data,
+      filter: filter,
+      athleteRows: trendAthleteRows,
+      loadDefinitions: loadDefinitions,
+      selectedLoadDefinitionId: _selectedLoadDefinitionId,
+      selectedAthleteId: _selectedTrendAthleteId,
+      onLoadDefinitionChanged: (value) =>
+          setState(() => _selectedLoadDefinitionId = value),
+      onAthleteChanged: (value) =>
+          setState(() => _selectedTrendAthleteId = value),
+      onOpenSession: _openSession,
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _Header(
-            data: data,
-            filteredView: filteredView,
-            periodLabel: _periodLabel(data),
-          ),
-          const SizedBox(height: 10),
-          if (_error != null) ...[
-            _InlineErrorBanner(message: _error!),
-            const SizedBox(height: 10),
-          ],
-          _Filters(
-            dateFromCtrl: _dateFromCtrl,
-            dateToCtrl: _dateToCtrl,
-            searchCtrl: _searchCtrl,
-            classificationOptions: teamHeatmapClassificationOptions,
-            selectedClassifications: _classificationFilters,
-            fallbackFilter: _fallbackFilter,
-            stateFilter: _stateFilter,
-            activeFilterCount: activeFilterCount,
-            onApply: _load,
-            onClassificationChanged: _setClassificationFilter,
-            onFallbackChanged: (value) =>
-                setState(() => _fallbackFilter = value),
-            onStateChanged: (value) => setState(() => _stateFilter = value),
-            onReset: _resetFilters,
-          ),
-          const SizedBox(height: 10),
-          const TeamHeatmapLegend(),
-          const SizedBox(height: 10),
-          Expanded(
-            child: TeamHeatmapGrid(
-              data: data,
-              view: filteredView,
-              onCellSelected: _showCellDetail,
-              onEventSelected: _openEvent,
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 1100) {
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  header,
+                  const SizedBox(height: 10),
+                  if (_error != null) ...[
+                    _InlineErrorBanner(message: _error!),
+                    const SizedBox(height: 10),
+                  ],
+                  filters,
+                  const SizedBox(height: 10),
+                  const TeamHeatmapLegend(),
+                  const SizedBox(height: 10),
+                  SizedBox(height: 360, child: grid),
+                  const SizedBox(height: 12),
+                  SizedBox(height: 430, child: trendPanel),
+                ],
+              ),
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              const SizedBox(height: 10),
+              if (_error != null) ...[
+                _InlineErrorBanner(message: _error!),
+                const SizedBox(height: 10),
+              ],
+              filters,
+              const SizedBox(height: 10),
+              const TeamHeatmapLegend(),
+              const SizedBox(height: 10),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: grid),
+                    const SizedBox(width: 12),
+                    SizedBox(width: 390, child: trendPanel),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -214,13 +286,19 @@ class _TeamLongitudinalHeatmapScreenState
   void _showCellDetail(TeamHeatmapCellSelection selection) {
     showDialog<void>(
       context: context,
-      builder: (_) =>
-          _CellDetailDialog(selection: selection, onOpenSession: _openSession),
+      builder: (_) => _CellDetailDialog(
+        selection: selection,
+        onOpenSession: _openSessionFromDialog,
+      ),
     );
   }
 
-  void _openSession(int sessionId) {
+  void _openSessionFromDialog(int sessionId) {
     Navigator.of(context).pop();
+    _openSession(sessionId);
+  }
+
+  void _openSession(int sessionId) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SessionDetailScreen(
@@ -906,13 +984,7 @@ String _formatDateOnly(String raw) {
 }
 
 String _formatDate(String raw) {
-  final parsed = DateTime.tryParse(raw);
-  if (parsed == null) return raw;
-  final date = _formatDateOnly(raw);
-  final time =
-      '${parsed.hour.toString().padLeft(2, '0')}:'
-      '${parsed.minute.toString().padLeft(2, '0')}';
-  return '$date $time';
+  return formatSessionDateForDisplay(raw);
 }
 
 String _formatNumber(double? value, {int digits = 1}) {
